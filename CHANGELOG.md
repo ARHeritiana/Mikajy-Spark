@@ -5,6 +5,10 @@ and versions follow `MAJOR.MINOR` or `MAJOR.MINOR.PATCH` (the Android `versionNa
 
 ## [Unreleased]
 
+## [5.6] - 2026-11-17
+
+Updates 5.5 in place from the app. `versionCode` 22.
+
 ### Fixed
 - **Cursive x.** An x written as two arcs back to back (`)(`, the school cursive x) was read as a closing and an
   opening bracket, so `2x=6` had no answer. The two arcs are now one symbol, the unknown x
