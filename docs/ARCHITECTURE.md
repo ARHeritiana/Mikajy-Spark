@@ -5,7 +5,7 @@ and no runtime dependency.
 
 ```
  pen strokes ──► recognizer.segmentStroke()  cut joined-up cursive strokes into letters
-              └► app.zoneOf + core_main.group()  strokes → symbols, per zone (line, numerator, denominator, exponent)
+              └► app.zoneOf + Recognizer.groupStrokes()  strokes → symbols, per zone (line, numerator, denominator, exponent)
  symbols ─────► core_cnn.predict()      CNN (Web Worker, main-thread fallback) → class probabilities
               └► core_main.classifyP()  blend with kNN over the user's confirmed corrections
  symbols ─────► Ink.addFraction / addRoot / overwritten / insert   edit the line's expression tree
@@ -54,5 +54,6 @@ exponent its base's superscript, so there are no index-based "cover" counts or f
 
 ## Known debt
 Editing structure, layout and tokenisation are in `ink.js` behind unit and drawn-stroke tests. Still dense: stroke
-grouping (`core_main.group`) and the root-sign shape test (`app.radical`). The thresholds were validated on synthetic
+grouping (`Recognizer.groupStrokes`, with the cursive-x test `Recognizer.cursiveX`) and the root-sign shape test
+(`app.radical`). The model has no `x` class: a cursive x is recognised by shape, a `×` shape by its position (`Ink.starIsX`). The thresholds were validated on synthetic
 strokes, not yet on recorded finger-written samples.

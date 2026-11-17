@@ -22,6 +22,11 @@ GLYPHS = {
     "+": [[(0, .5), (1, .5)], [(.5, .1), (.5, .9)]],
     "=": [[(0, .35), (1, .35)], [(0, .65), (1, .65)]],
     "4": [[(.7, 0), (0, .65), (1, .65)], [(.7, 0), (.7, 1)]],
+    "(": [[(1 - .7 * math.cos(math.pi * (.35 - .7 * t / 16)), .5 - .5 * math.sin(math.pi * (.35 - .7 * t / 16))) for t in range(17)]],
+    ")": [[(.7 * math.cos(math.pi * (-.35 + .7 * t / 16)), .5 + .5 * math.sin(math.pi * (-.35 + .7 * t / 16))) for t in range(17)]],
+    # cursive x, two arcs back to back: ")" then "("
+    "x": [[(-.05 + .55 * math.cos(-math.pi / 2 + math.pi * t / 16), .62 + .38 * math.sin(-math.pi / 2 + math.pi * t / 16)) for t in range(17)],
+          [(1.05 - .55 * math.cos(-math.pi / 2 + math.pi * t / 16), .62 + .38 * math.sin(-math.pi / 2 + math.pi * t / 16)) for t in range(17)]],
 }
 
 def dense(points, per=8):
@@ -284,7 +289,114 @@ async def scene_erase_root_sign(page):
     await page.wait_for_timeout(PAUSE)
     return "4", None
 
-EDIT_SCENES = [("exponent written later", scene_power_later), ("terms appended later", scene_append_later),
+async def bar(page, x0, x1, y):
+    await pen(page, dense([(x0, y), (x1, y)]))
+
+async def root_sign(page, x, base, h, reach):
+    hook = root_hook(x, base, h)
+    top = hook[-1]
+    await pen(page, hook + dense([top, (top[0] + reach, top[1])], 16))
+    return top
+
+async def seq_box(page):
+    return await page.evaluate("() => Ink.unionOf(lines[0].seq)")
+
+async def equals_after(page):
+    b = await seq_box(page)
+    await stroke_glyph(page, "=", b["x1"] + 30, (b["y0"] + b["y1"]) / 2 + 25, 55)
+
+async def scene_cursive_x(page):
+    """A cursive x written as two arcs back to back is the unknown, not ")(" and not a multiplication."""
+    await write(page, [("2", 60, 300, 80), ("x", 120, 300, 60), ("=", 200, 300, 60), ("4", 280, 300, 80)])
+    return "2x=4", "x=2"
+
+async def scene_brackets_not_x(page):
+    """")(" between two bracketed groups stays two brackets (taller than the digits, and there is a "(" to close)."""
+    await write(page, [("(", 20, 310, 100), ("1", 80, 300, 80), ("+", 135, 285, 50), ("2", 190, 300, 80), (")", 245, 310, 100),
+                       ("(", 255, 310, 100), ("3", 335, 300, 80), ("+", 390, 285, 50), ("4", 445, 300, 80), (")", 500, 310, 100),
+                       ("=", 560, 300, 60)])
+    return "(1+2)(3+4)=", "21"
+
+async def scene_long_root_after_pause(page):
+    """A root with a long bar is typeset first; the long radicand written under its bar afterwards goes inside."""
+    top = await root_sign(page, 60, 300, 110, 330)
+    await page.wait_for_timeout(PAUSE)
+    await write(page, [("1", top[0] + 15, 295, 75), ("2", top[0] + 65, 295, 75), ("+", top[0] + 135, 285, 55), ("4", top[0] + 205, 295, 75)])
+    await page.wait_for_timeout(PAUSE)
+    await equals_after(page)
+    return "√(12+4)=", "4"
+
+async def scene_root_bar_lengthened(page):
+    """√(1), then +3 written after the root, then its bar drawn on over them: √(1+3)."""
+    top = await root_sign(page, 60, 300, 110, 70)
+    await write(page, [("1", top[0] + 15, 295, 75)])
+    await page.wait_for_timeout(PAUSE)
+    r = await page.evaluate("() => lines[0].seq[0].bar")
+    await write(page, [("+", r["x1"] + 20, 285, 55), ("3", r["x1"] + 95, 295, 75)])
+    await page.wait_for_timeout(PAUSE)
+    r, b = await page.evaluate("() => lines[0].seq[0].bar"), await seq_box(page)
+    await bar(page, r["x1"] - 3, b["x1"] + 10, r["top"])
+    await page.wait_for_timeout(PAUSE)
+    await equals_after(page)
+    return "√(1+3)=", "2"
+
+async def scene_nested_fractions(page):
+    """(1/2)/4 written at once, inner bar first: the wider bar is the main one."""
+    await stroke_glyph(page, "1", 150, 200, 60)
+    await bar(page, 120, 220, 215)
+    await stroke_glyph(page, "2", 150, 290, 60)
+    await bar(page, 90, 260, 310)
+    await write(page, [("4", 150, 400, 70), ("=", 300, 330, 60)])
+    return "((1)/(2))/(4)=", "0.125"
+
+async def scene_bar_under_fraction(page):
+    """1/2 is typeset; a wider bar drawn under it and a 4 below: (1/2)/4, not 1/(2/4)."""
+    await stroke_glyph(page, "1", 150, 230, 70)
+    await bar(page, 120, 220, 250)
+    await stroke_glyph(page, "2", 150, 340, 70)
+    await page.wait_for_timeout(PAUSE)
+    f = await seq_box(page)
+    await bar(page, f["x0"] - 25, f["x1"] + 25, f["y1"] + 20)
+    await page.wait_for_timeout(PAUSE)
+    await stroke_glyph(page, "4", (f["x0"] + f["x1"]) / 2 - 20, f["y1"] + 110, 70)
+    await page.wait_for_timeout(PAUSE)
+    await equals_after(page)
+    return "((1)/(2))/(4)=", "0.125"
+
+async def scene_bar_under_root(page):
+    """√4+4 is typeset; a bar under all of it and a 3 below: (√4+4)/3, the bar does not go inside the root."""
+    top = await root_sign(page, 60, 300, 100, 90)
+    await write(page, [("4", top[0] + 15, 295, 70), ("+", top[0] + 120, 285, 50), ("4", top[0] + 180, 300, 80)])
+    await page.wait_for_timeout(PAUSE)
+    b = await seq_box(page)
+    await bar(page, b["x0"] - 5, b["x1"] + 5, b["y1"] + 18)
+    await page.wait_for_timeout(PAUSE)
+    await stroke_glyph(page, "3", (b["x0"] + b["x1"]) / 2 - 20, b["y1"] + 110, 70)
+    await page.wait_for_timeout(PAUSE)
+    await equals_after(page)
+    return "(√(4)+4)/(3)=", "2"
+
+async def scene_numerator_extended(page):
+    """1/2 is typeset; +3 written after the 1 extends the numerator: (1+3)/2."""
+    await stroke_glyph(page, "1", 150, 230, 70)
+    await bar(page, 120, 220, 250)
+    await stroke_glyph(page, "2", 150, 340, 70)
+    await page.wait_for_timeout(PAUSE)
+    n = await page.evaluate("() => lines[0].seq[0].num[0].box")
+    h = n["y1"] - n["y0"]
+    await stroke_glyph(page, "+", n["x1"] + 10, n["y1"] - .1 * h, .7 * h)
+    await page.wait_for_timeout(PAUSE)
+    n = await page.evaluate("() => Ink.unionOf(lines[0].seq[0].num)")
+    await stroke_glyph(page, "3", n["x1"] + 12, n["y1"], h)
+    await page.wait_for_timeout(PAUSE)
+    await equals_after(page)
+    return "(1+3)/(2)=", "2"
+
+EDIT_SCENES = [("cursive x", scene_cursive_x), ("brackets )( are not an x", scene_brackets_not_x),
+               ("long root, radicand after a pause", scene_long_root_after_pause), ("root bar lengthened later", scene_root_bar_lengthened),
+               ("nested fractions at once", scene_nested_fractions), ("bar under a typeset fraction", scene_bar_under_fraction),
+               ("bar under a root expression", scene_bar_under_root), ("numerator extended later", scene_numerator_extended),
+               ("exponent written later", scene_power_later), ("terms appended later", scene_append_later),
                ("fraction", scene_fraction), ("fraction, big denominator written at once", scene_fraction_quick_big_den), ("bar drawn under an expression", scene_bar_under),
                ("root drawn around a number", scene_root_over), ("erase an operator", scene_erase_sign),
                ("erase a root sign", scene_erase_root_sign),
