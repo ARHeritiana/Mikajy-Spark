@@ -132,7 +132,8 @@ function radical(s){const n=s.length;if(n<8)return null;let v=0;for(let i=0;i<n;
  if(a<n-1){const t=s.slice(a),H0=s[v][1]-s[a][1];tx=Math.max(...t.map(p=>p[0]))-s[a][0];
   if(tx<.15*H0||Math.abs(t[t.length-1][1]-s[a][1])>.45*tx){a=n-1;tx=0}}   // not a bar after all: the stroke is just a rise
  const H=s[v][1]-s[a][1];if(H<28)return null;
- if(!(s[0][1]<s[v][1]-.15*H&&s[0][1]>s[a][1]&&s[v][0]>s[0][0]&&s[a][0]>s[v][0]+.15*H))return null;
+ // the rise leans right; followed by a real bar it may be almost vertical (a long root written quickly)
+ if(!(s[0][1]<s[v][1]-.15*H&&s[0][1]>s[a][1]&&s[v][0]>s[0][0]&&s[a][0]>s[v][0]+(tx>.5*H?.02:.15)*H))return null;
  if(tx<.15*H&&s[0][1]<s[a][1]+.35*H)return null;   // without a bar, the tick must be clearly shorter than the rise (else it is a v or a u)
  if(crosses(s.slice(0,v+1),s.slice(v)))return null;   // a root sign never crosses itself (a looped cursive x does)
  const main=s.slice(0,a+1);main.vin={x0:s[a][0],x1:s[a][0]+tx};main.full=s;main.hook=tx<.25*H;return main}
@@ -253,7 +254,8 @@ async function splitCursive(L){
  for(const s of L.ink.slice()){if(s.vin||s.length<12)continue;const parts=await Recognizer.segmentStroke(s,cl);if(parts.length>1)cut.set(s,parts)}
  if(cut.size)L.ink=L.ink.flatMap(s=>cut.get(s)||[s])}
 /** Long flat strokes that may be fraction bars, set apart before the other strokes are grouped into symbols. */
-function fractionBars(L,S){const info=S.map(s=>({s,b:bb(s)})),ref=Math.max(40,...info.map(o=>Math.max(o.b.w,o.b.h))),big=o=>Math.max(o.b.w,o.b.h)>=.2*ref,out=[];
+function fractionBars(L,S){const info=S.map(s=>({s,b:bb(s)})),ref=Math.max(40,...info.filter(o=>!isBar(o.s)).map(o=>Math.max(o.b.w,o.b.h))),   // bars themselves do not count: a long bar is far wider than what it divides
+ big=o=>Math.max(o.b.w,o.b.h)>=.2*ref,out=[];
  for(const o of info){if(!isBar(o.s))continue;const y=(o.b.y0+o.b.y1)/2,inr=p=>p!==o&&(p.b.x0+p.b.x1)/2>=o.b.x0-12&&(p.b.x0+p.b.x1)/2<=o.b.x1+12;
   if(info.some(p=>inr(p)&&p.b.y0<y-4&&p.b.y1>y+4))continue;                                        // crossed: part of + or π
   if(info.some(p=>{if(!inr(p)||!isBar(p.s)||p.b.w<.6*o.b.w||p.b.w>o.b.w/.6)return false;const py=(p.b.y0+p.b.y1)/2;if(Math.abs(py-y)>=.8*o.b.w)return false;
@@ -284,7 +286,8 @@ async function doRecognize(){
   const G=[...zones.values()].flatMap(z=>Recognizer.groupStrokes(z));   // strokes of a numerator, a denominator or an exponent never form one symbol with others
   for(const o of bars)items.push({kind:'bar',strokes:[o.s],b:o.b,up:o.up,dn:o.dn});
   for(const g of G){const b=g.b,rs=g.s.find(t=>t.vin);
-   if(g.tiny&&G.length>1||Math.max(b.w,b.h)<16)items.push({kind:'dot',strokes:g.s,b});else items.push({kind:'sym',strokes:g.s,b,vin:rs&&rs.vin,hook:rs&&rs.hook,cx:g.x})}
+   if(g.tiny&&G.length>1&&b.w<2*b.h+12||Math.max(b.w,b.h)<16)items.push({kind:'dot',strokes:g.s,b});   // small next to the rest, and round: a dash is no dot
+   else items.push({kind:'sym',strokes:g.s,b,vin:rs&&rs.vin,hook:rs&&rs.hook,cx:g.x})}
   jobs.push({L,items})}
  await Promise.all(jobs.flatMap(j=>j.items.filter(it=>it.kind=='sym').map(async it=>{const r=await classify(it.strokes);it.x=r.x;it.cands=r.cands;
   if(it.cx)it.cands=[{c:'x',p:.9}].concat(r.cands.filter(o=>o.c!='x').map(o=>({c:o.c,p:o.p*.1}))).slice(0,5)})));   // a cursive x, )(

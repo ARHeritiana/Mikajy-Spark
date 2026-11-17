@@ -2,6 +2,7 @@
 """End-to-end: synthetic pen strokes are drawn on the real page; the recogniser, the exponent detection
 and the maths engine must turn them into the right answer. Uses the page exactly as shipped."""
 import asyncio
+import json
 import math
 from pathlib import Path
 from playwright.async_api import async_playwright
@@ -392,6 +393,42 @@ async def scene_numerator_extended(page):
     await equals_after(page)
     return "(1+3)/(2)=", "2"
 
+# Real handwriting (tests/fixtures/handwriting.json): strokes traced from screenshots of expressions that were misread.
+HANDWRITING = json.loads((Path(__file__).resolve().parent / "fixtures/handwriting.json").read_text())
+
+async def replay(page, name, pause_before=None):
+    """Writes the recorded strokes `name`; with `pause_before`, waits for them to be read before that stroke."""
+    for k, s in enumerate(HANDWRITING[name]):
+        if k == pause_before:
+            await page.wait_for_timeout(PAUSE)
+        await pen(page, s)
+
+async def scene_real_power_minus(page):
+    """2² − 4×3×7: the − at mid-height after the exponent is a subtraction, not part of the exponent (2^(2−)); the ×
+    written tight against the 3 is a symbol of its own."""
+    await replay(page, "power minus product")
+    return "2²-4×3×7", "-80"
+
+async def scene_real_bracket_fraction(page):
+    """320×(1+27/100): the 1 after a tall ( is a symbol of its own (they were read as one, and 0×( as the word exp)."""
+    await replay(page, "bracket with a fraction")
+    return "320×(1+(27)/(100))", "406.4"
+
+async def scene_real_root_numerator(page):
+    """(−3−√64)/3 written at once: a bar far wider than the symbols above it is still a fraction bar."""
+    await replay(page, "root in a numerator")
+    return "(-3-√(64))/(3)", "≈-3.666666667"
+
+async def scene_real_steep_root(page):
+    """The same with an almost vertical rise: still a root sign (it was fused with the − and the 64 into a π)."""
+    await replay(page, "steep root in a numerator")
+    return "(-3-√(64))/(3)", "≈-3.666666667"
+
+async def scene_real_bar_after_numerator(page):
+    """−3−√64 is typeset, then the bar and the 3: the minus signs go into the numerator with the rest."""
+    await replay(page, "root in a numerator", pause_before=7)
+    return "(-3-√(64))/(3)", "≈-3.666666667"
+
 EDIT_SCENES = [("cursive x", scene_cursive_x), ("brackets )( are not an x", scene_brackets_not_x),
                ("long root, radicand after a pause", scene_long_root_after_pause), ("root bar lengthened later", scene_root_bar_lengthened),
                ("nested fractions at once", scene_nested_fractions), ("bar under a typeset fraction", scene_bar_under_fraction),
@@ -404,7 +441,10 @@ EDIT_SCENES = [("cursive x", scene_cursive_x), ("brackets )( are not an x", scen
                ("= written with a pause", scene_equals_after_pause), ("erase one symbol", scene_erase_one),
                ("= completed long after", scene_equals_long_after), ("= bars drawn apart", scene_equals_bars_apart),
                ("= completed after the next term", scene_equals_after_other), ("+ inserted between digits", scene_insert_between),
-               ("dot of i added long after", scene_dot_long_after)]
+               ("dot of i added long after", scene_dot_long_after),
+               ("real: 2² − 4×3×7", scene_real_power_minus), ("real: 320×(1+27/100)", scene_real_bracket_fraction),
+               ("real: (−3−√64)/3", scene_real_root_numerator), ("real: steep root", scene_real_steep_root),
+               ("real: bar after the numerator", scene_real_bar_after_numerator)]
 
 async def main():
     async with async_playwright() as p:

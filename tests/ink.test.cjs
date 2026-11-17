@@ -199,3 +199,42 @@ test('letters: a written x is the unknown; runs of letters split into names, e a
   assert.deepEqual(T('2ex'), ['2', 'e', 'x']);
   assert.throws(() => T('xq'), /unknown word/);
 });
+
+test('a − written at mid-height after an exponent is a subtraction; level with the exponent it continues it', () => {
+  const seq = [];
+  Ink.insert(seq, g('2', box(0, 20, 60, 140)), 80);       // base: 120 tall
+  Ink.insert(seq, g('2', box(70, 0, 100, 50)), 80);       // exponent
+  Ink.insert(seq, g('-', box(105, 78, 140, 84)), 80);     // at the middle of the base: above its foot, below the exponent
+  Ink.insert(seq, g('4', box(160, 20, 200, 140)), 80);
+  assert.equal(text(seq), '2²-4');
+  const pow = [];
+  Ink.insert(pow, g('2', box(0, 20, 60, 140)), 80);
+  Ink.insert(pow, g('n', box(70, 0, 100, 50)), 80);
+  Ink.insert(pow, g('-', box(105, 22, 125, 26)), 80);     // level with the exponent's middle
+  Ink.insert(pow, g('1', box(130, 0, 150, 50)), 80);
+  assert.equal(text(pow), '2^(n-1)');
+});
+
+test('a bar drawn under a typeset expression takes its minus signs too, and a leading one reaching over the bar', () => {
+  const line = typeset([Ink.glyph('-'), Ink.glyph('3'), Ink.glyph('-'), Ink.root([Ink.glyph('6'), Ink.glyph('4')], 0)]);
+  const u = Ink.unionOf(line.slice(1)), lead = line[0].box;
+  const bar = box(lead.x0 + .6 * lead.w, u.y1 + 15, u.x1 + 10, u.y1 + 15);   // starts under the middle of the leading −
+  Ink.addFraction(line, bar, 80, false, false);
+  assert.equal(text(line), '(-3-√(64))/()');
+  const again = typeset([Ink.glyph('-'), Ink.glyph('3'), Ink.glyph('-'), Ink.glyph('4')]), v = again[0].box, w = Ink.unionOf(again);
+  Ink.addFraction(again, box(v.x1 + 6, w.y1 + 15, w.x1 + 10, w.y1 + 15), 80, false, false);   // starts just after the leading −
+  assert.equal(text(again), '(-3-4)/()');
+  const binary = typeset([Ink.glyph('5'), Ink.glyph('-'), Ink.glyph('3')]), t = binary[2].box;
+  Ink.addFraction(binary, box(t.x0 - 4, t.y1 + 15, t.x1 + 4, t.y1 + 15), 80, false, false);   // 5 − 3/…: the − stays out
+  assert.equal(text(binary), '5-(3)/()');
+});
+
+test('a numerator, denominator, exponent or radicand does not end in an operator: a crossed 7 is no +', () => {
+  const seven = () => Ink.glyph([{c: '+', p: .45}, {c: '7', p: .3}], {fresh: true});
+  const f = Ink.frac([Ink.glyph('2'), seven()], [Ink.glyph('1'), Ink.glyph('0'), Ink.glyph('0')]);
+  Ink.readAll([f], true);
+  assert.equal(Ink.ch(f.num[1]), '7');
+  const mid = Ink.frac([Ink.glyph('2'), Ink.glyph([{c: '+', p: .45}, {c: '7', p: .3}], {fresh: true}), Ink.glyph('1')], [Ink.glyph('3')]);
+  Ink.readAll([mid], true);
+  assert.equal(Ink.ch(mid.num[1]), '+', 'between two terms it stays a +');
+});

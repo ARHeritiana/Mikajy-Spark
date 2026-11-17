@@ -5,6 +5,25 @@ and versions follow `MAJOR.MINOR` or `MAJOR.MINOR.PATCH` (the Android `versionNa
 
 ## [Unreleased]
 
+### Fixed
+Found by replaying real finger-written expressions (traced from screenshots, now `tests/fixtures/handwriting.json`):
+- **`2² − 4×3×7` was read `2^(2−) 4×3×7`.** A − written at the middle of the base, after an exponent, is above the
+  base's foot, and that was enough to continue the exponent. An operator now continues an exponent only when it is level
+  with the exponent itself (`2^(n−1)` still works).
+- **Symbols written close to a narrow digit or a tall bracket were glued to it.** The rule for the flag of a 5 (a
+  stroke drawn from a stem) took any stroke that started inside the stem's box: an × written tight against a 3 vanished
+  into it (`4×37`), and the 1 after a tall ( became one symbol with it. That freed `0`, `×` and `(1` to be read as the
+  word *exp*: `320×(1+27/100)` came out as `32exp+…`. A flag must now start where the stem's stroke ends, and a tall
+  bracket's height no longer widens the room it gives the symbol next to it. A 0 after digits never starts a function
+  name.
+- **`(−3 − √64)/3` was read `(−3·π)/3`.** A root sign with an almost vertical rise was not recognised as one, and its
+  strokes were fused with the − and the 64 into a π. With a bar after it, a steep rise is now a root. Two more faults on
+  the way: a fraction bar much wider than the symbols above it was taken for a minus (the "is something written above
+  it?" test ignored everything smaller than a fifth of the bar), and a bar drawn under a typeset `−3 − √64` left the
+  minus signs out of the numerator (`()/3`). A dash is no longer read as a decimal point next to a large symbol.
+- **A crossed 7 at the end of a numerator was read as `+`** (`(2+)/100`). A numerator, denominator, exponent or radicand
+  cannot end in an operator, as the line already could not.
+
 ## [5.7] - 2026-11-17
 
 Updates 5.6 in place from the app. `versionCode` 23.

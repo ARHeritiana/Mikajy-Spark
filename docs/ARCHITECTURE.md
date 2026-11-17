@@ -56,4 +56,5 @@ exponent its base's superscript, so there are no index-based "cover" counts or f
 Editing structure, layout and tokenisation are in `ink.js` behind unit and drawn-stroke tests. Still dense: stroke
 grouping (`Recognizer.groupStrokes`, with the cursive-x test `Recognizer.cursiveX`) and the root-sign shape test
 (`app.radical`). The model has no `x` class: a cursive x is recognised by shape, a `×` shape by its position (`Ink.starIsX`). The thresholds were validated on synthetic
-strokes, not yet on recorded finger-written samples.
+strokes and on a few real finger-written expressions (`tests/fixtures/handwriting.json`, traced from phone screenshots and
+replayed by `tests/browser_strokes.py`); a misread expression is best fixed by adding its strokes there first.

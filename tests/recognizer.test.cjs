@@ -126,3 +126,11 @@ test('segmentStroke splits when pieces are read confidently or spell a word, and
   assert.equal(whole.length, 1);
   assert.equal(whole[0], s);
 });
+
+test('a 0 after digits continues the number: 320 × ( is not 32·exp(', () => {
+  const g = (cands, x) => ({c: cands.map(([c, p]) => ({c, p})), i: 0, b: {x0: x, y0: 0, x1: x + 30, y1: 50, w: 30, h: 50}});
+  const A = [g([['3', .9]], 0), g([['2', .95]], 40), g([['0', .45], ['o', .3], ['e', .075]], 80), g([['*', .98], ['x', .25]], 120),
+    g([['(', .6], ['p', .05]], 160)];
+  R.wordfix(A);
+  assert.deepEqual(A.map(o => o.c[o.i].c), ['3', '2', '0', '*', '(']);
+});
