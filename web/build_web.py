@@ -60,6 +60,8 @@ h2{font:600 34px/1 H,cursive;margin:0;color:var(--ink)}
 .empty{font:28px/1.25 H,cursive;color:var(--graphite);margin:26px 0 30px;text-align:center}
 #toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--blue);color:var(--toast-ink);padding:8px 18px;border-radius:16px;font:24px/1.1 H,cursive;opacity:0;transition:opacity .3s;z-index:20;pointer-events:none;max-width:calc(100vw - 72px);width:max-content;text-align:center}
 @media (orientation:landscape) and (max-height:520px){#panel{left:auto;right:0;top:0;bottom:0;max-height:none;width:min(500px,68%);border-radius:22px 0 0 22px;transform:translateX(28px)}#sheet.in #panel{transform:none}.tools{grid-template-columns:repeat(3,minmax(0,1fr))}.tool{font-size:22px;gap:8px}.hint{display:none}.row{padding:4px 0}.head{padding:8px 0 4px}}
+h2{white-space:nowrap}
+@media (max-width:400px){h2{font-size:29px}.tab{font-size:23px}.opt{font-size:23px;padding:8px 9px}.lab{font-size:21px}.tool{font-size:22px}.done{font-size:23px}}
 @media (prefers-reduced-motion:reduce){#panel,#back{transition:none}.opt.on .ring path{animation:none;stroke-dashoffset:0}}</style>""".replace("__FONT__", font)
 app = rd('app.js').replace('/*CLS*/', cls)
 CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; "

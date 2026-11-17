@@ -154,9 +154,9 @@ const Ink = (() => {
     for (const n of seq) {
       if (n.t === 'frac' && n.bar) {
         const B = n.bar, fs = n.ts || s, un = unionOf(n.num), ud = unionOf(n.den);
-        // A bar at least as wide as this fraction's, under its denominator or over its numerator, is a new fraction
+        // A bar at least as wide as this fraction's bar, under its denominator or over its numerator, is a new fraction
         // around this one ((1/2)/3), not one inside a part of it.
-        if (c === '-' && b.w >= .85 * (B.x1 - B.x0) && b.x0 <= B.x0 + .25 * fs && b.x1 >= B.x1 - .25 * fs &&
+        if (c === '-' && b.w >= B.x1 - B.x0 - .03 * fs && b.x0 <= B.x0 + .15 * fs && b.x1 >= B.x1 - .15 * fs &&
           ((ud && cy > ud.y1 - .1 * fs) || (un && cy < un.y0 + .1 * fs))) continue;
         // Each part reaches as far as its content does (a fraction in a fraction is tall). A symbol written just after the
         // end of a part, wholly on that side of the bar and level with the part, extends it (the 4 of 14 written after
