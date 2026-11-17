@@ -6,7 +6,8 @@ cd "$(dirname "$0")/.."
 JSON_URL='https://repo1.maven.org/maven2/org/json/json/20240303/json-20240303.jar'
 JSON_SHA256='3cf6cd6892e32e2b4c1c39e0f52f5248a2f5b37646fdfbb79a66b46b618414ed'
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
-curl -fsSL "$JSON_URL" -o "$work/json.jar"
+# Maven Central rate-limits shared CI runners (HTTP 429): retry with backoff before failing.
+curl -fsSL --retry 6 --retry-delay 10 --retry-all-errors "$JSON_URL" -o "$work/json.jar"
 echo "$JSON_SHA256  $work/json.jar" | sha256sum -c --quiet
 mkdir -p "$work/out"
 javac --release 8 -encoding UTF-8 -Xlint:all,-options -Werror -cp "$work/json.jar" -d "$work/out" \
