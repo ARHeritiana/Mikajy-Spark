@@ -76,7 +76,7 @@ const Recognizer = (() => {
     A.forEach((g, k) => {
       if (used[k] || g.locked || !g.b) return;
       const c = ch(g);
-      if (!isLetter(c)) return;
+      if (!isLetter(c) || c === 'x') return;   // x stands on its own: it is the unknown
       const e = g.c.find(o => o.c === 'e');
       if (c !== 'e' && e && e.p >= .12 && e.p >= .25 * g.c[g.i].p) { g.i = g.c.indexOf(e); return; }   // cursive e read as c / o
       if (c === 'e' && g.c[g.i].p > .5) return;
@@ -221,25 +221,63 @@ const Recognizer = (() => {
     const m = qVin ? 0 : .18 * Math.max(q.h, q.w, 30), cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
     const bar = q.w > 2.5 * Math.max(q.h, 1), stem = q.h > 1.3 * q.w && q.h > 25;
     const dotA = tiny && stem && cy < q.y0 && q.y0 - cy < .7 * q.h, dotB = tiny && stem && cy > q.y1 + .1 * q.h && cy - q.y1 < .6 * q.h;
-    const p0 = s[0], touch = stem && !tiny && b.w > .2 * q.h && p0[0] >= q.x0 - .1 * q.h && p0[0] <= q.x1 + .1 * q.h &&
-      p0[1] >= q.y0 - .1 * q.h && p0[1] <= q.y1 + .1 * q.h;
-    return touch || (cx >= q.x0 - m && cx <= q.x1 + m && (!tiny || bar || qTiny || dotA || dotB));
+    // A flag or bar drawn from a stem (the top of a 5) belongs to it; a full-height stroke that merely starts next to
+    // a stem is the next symbol (a cursive x after a 2).
+    const p0 = s[0], touch = stem && !tiny && b.w > .2 * q.h && (b.h < .6 * q.h || cx <= q.x1 + .1 * q.h) &&
+      p0[0] >= q.x0 - .1 * q.h && p0[0] <= q.x1 + .1 * q.h && p0[1] >= q.y0 - .1 * q.h && p0[1] <= q.y1 + .1 * q.h;
+    // Same column is not enough: two symbols stacked one above the other (in nested fractions) stay apart. The
+    // bars of = may be far apart for their (zero) height, but not for their width.
+    const gap = Math.max(0, b.y0 - q.y1, q.y0 - b.y1), close = gap < Math.max(.5 * Math.max(b.h, q.h), .8 * Math.max(b.w, q.w));
+    return touch || (cx >= q.x0 - m && cx <= q.x1 + m && (tiny ? bar || qTiny || dotA || dotB : close));
   }
-  /** Groups strokes into symbols: [{s: strokes in drawing order, b: box, tiny}], in the order of each symbol's first stroke. */
+  /** Groups strokes into symbols: [{s: strokes in drawing order, b: box, tiny, x}], in the order of each symbol's first
+   *  stroke. `x` marks a cursive x written as two arcs back to back. */
   function groupStrokes(S) {
     const bs = S.map(extent), ref = Math.max(40, ...bs.map(b => Math.max(b.w, b.h)));
     const up = S.map((_, i) => i), root = i => { while (up[i] !== i) i = up[i] = up[up[i]]; return i; };
     for (let i = 0; i < S.length; i++)
       for (let j = 0; j < i; j++)
-        if (partOf(S[i], bs[i], bs[j], !!S[j].vin, ref) || partOf(S[j], bs[j], bs[i], !!S[i].vin, ref)) up[root(i)] = root(j);
+        if (partOf(S[i], bs[i], bs[j], !!S[j].vin, ref) || partOf(S[j], bs[j], bs[i], !!S[i].vin, ref) || cursiveX(S[i], S[j]))
+          up[root(i)] = root(j);
     const G = new Map();
     S.forEach((s, i) => { const k = root(i); if (!G.has(k)) G.set(k, []); G.get(k).push(i); });
     return [...G.values()].map(ix => {
       const b = extent(ix.flatMap(i => [[bs[i].x0, bs[i].y0], [bs[i].x1, bs[i].y1]]));
-      return {s: ix.map(i => S[i]), b, tiny: b.w < .2 * ref && b.h < .2 * ref};
+      return {s: ix.map(i => S[i]), b, tiny: b.w < .2 * ref && b.h < .2 * ref, x: ix.length === 2 && cursiveX(S[ix[0]], S[ix[1]])};
     });
   }
 
-  return Object.freeze({ch, HR, DS, WORDS, wordfix, resample, extent, ligatureCuts, cutAt, segmentStroke, groupStrokes});
+  /* ---- Cursive x: two arcs back to back, )( ------------------------------------------------------
+   * The model has no x class: a cursive x drawn in two strokes is read as ")" and "(" unless the two are recognised
+   * as one symbol. Closing-then-opening brackets ")(" are told apart by their shape: brackets are tall and thin and
+   * the pair is much taller than wide; the arcs of an x are rounder and together roughly as wide as tall. */
+  /** 'r' for an arc bulging to the right like ")", 'l' for one bulging left like "(", otherwise null. */
+  function arcSide(s) {
+    if (s.vin || s.length < 5) return null;
+    const b = extent(s);
+    if (b.h < 14 || b.w < .12 * b.h || b.w > 1.1 * b.h) return null;
+    const a = s[0], z = s[s.length - 1];
+    if (Math.abs(a[1] - z[1]) < .55 * b.h) return null;                        // runs from top to bottom (either way)
+    let path = 0, iR = 0, iL = 0;
+    for (let k = 1; k < s.length; k++) path += Math.abs(s[k][1] - s[k - 1][1]);
+    if (path > 1.5 * b.h) return null;                                          // no loop, no zigzag
+    s.forEach((p, k) => { if (p[0] > s[iR][0]) iR = k; if (p[0] < s[iL][0]) iL = k; });
+    const mid = p => p[1] > b.y0 + .2 * b.h && p[1] < b.y1 - .2 * b.h, near = x => Math.abs(x) <= .45 * b.w;
+    if (mid(s[iR]) && near(a[0] - b.x0) && near(z[0] - b.x0) && b.x1 - Math.max(a[0], z[0]) > .4 * b.w) return 'r';
+    if (mid(s[iL]) && near(b.x1 - a[0]) && near(b.x1 - z[0]) && Math.min(a[0], z[0]) - b.x0 > .4 * b.w) return 'l';
+    return null;
+  }
+  /** Are strokes `p` and `q` (in either order) the two arcs of a cursive x, ")" on the left touching "(" on the right? */
+  function cursiveX(p, q) {
+    let L = extent(p), R = extent(q);
+    if ((L.x0 + L.x1) > (R.x0 + R.x1)) { [p, q] = [q, p]; [L, R] = [R, L]; }
+    if (arcSide(p) !== 'r' || arcSide(q) !== 'l') return false;
+    const h = Math.max(L.h, R.h), u = extent([[L.x0, L.y0], [L.x1, L.y1], [R.x0, R.y0], [R.x1, R.y1]]);
+    const overlap = Math.min(L.y1, R.y1) - Math.max(L.y0, R.y0), gap = R.x0 - L.x1;
+    return Math.min(L.h, R.h) > .55 * h && overlap > .6 * Math.min(L.h, R.h) && gap < .3 * h && gap > -.45 * h &&
+      u.w >= .65 * u.h && Math.min(L.w / L.h, R.w / R.h) >= .22;
+  }
+
+  return Object.freeze({ch, HR, DS, WORDS, wordfix, resample, extent, ligatureCuts, cutAt, segmentStroke, groupStrokes, arcSide, cursiveX});
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Recognizer;

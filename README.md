@@ -36,7 +36,11 @@ Updates install over the old version only if both are signed with the same key (
   symbol next to a typeset one to give it an exponent, add terms anywhere in a line. A symbol finished after a pause
   (second bar of `=`, stem of `+`, dot of `i`) is completed, not split. Tap a symbol to cycle through the recogniser's alternatives.
 * **Roots keep their bar**: the bar is drawn as long as you drew it, before and after you write under it, and it
-  bounds the radicand. A root drawn around an existing number takes it inside.
+  bounds the radicand. A root drawn around an existing number takes it inside. Drawing the bar on further later
+  (from its end) takes what you wrote after the root inside too: `√1` `+3`, then lengthen the bar → `√(1+3)`.
+* **Long and nested expressions**: fractions in fractions (`(1/2)/4`, `1/(2/3)`, `(1/2)/(3/4)`, written at once or
+  bit by bit), roots over fractions and fractions under roots, roots in roots. A bar wider than a typeset fraction,
+  drawn under it, makes a fraction of it; a bar under a whole expression with a root takes the root along.
 * **Equations in one unknown:** polynomials of degree 1–2 with rational coefficients (`2x+3=7` → `x=2`, `(x−1)²=0` → `x=1`)
   and one-to-one forms such as `2^x=8` → `x=3`, `e^x=5` → `x≈1.609…`, `ln x=1` → `x≈2.718…`.
   Anything else is explicitly unsupported.
@@ -55,8 +59,10 @@ Updates install over the old version only if both are signed with the same key (
 Notation notes: use the angle setting for degrees or radians; a raised `0` is the exponent zero,
 **not** a degree sign. `%` means /100; after a sum or difference, `50+10%` is the explicitly
 supported percentage-increase convention (55). Ambiguous expressions such as `2/3x` must use
-parentheses. A `×`-shaped handwritten glyph may denote the unknown `x` when it appears in
-variable position (including as the start of an exponent); check recognition before trusting a result.
+parentheses. The unknown `x` can be written as a cursive x (two arcs back to back, `)(`, or in one stroke) or as a
+`×`-shaped glyph; a `×` shape is read as `x` where no multiplication can stand (at either end, next to an operator,
+before an exponent) and is then shown as `x`. Brackets written `)(` between two groups stay brackets (they are taller
+than the digits around them). Check recognition before trusting a result.
 `sin 2x` is read as `sin(2x)`; a second function name always ends the argument (`sin x cos x`).
 
 ## Mathematical scope (correctness-first)

@@ -7,7 +7,7 @@ const MathCore = (() => {
   const FUNCTIONS = new Set(['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh',
     'ln', 'log', 'exp', 'sqrt', 'abs']);
   const INVERSE = {sin: 'asin', cos: 'acos', tan: 'atan'};
-  const MAX_TOKENS = 160;
+  const MAX_TOKENS = 400;   // a stacked fraction alone costs 7 tokens: long expressions need room
   const MAX_DEPTH = 48;
   class MathError extends Error {
     constructor(code) { super(code); this.name = 'MathError'; this.code = code; }

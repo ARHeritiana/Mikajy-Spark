@@ -20,6 +20,8 @@ const Ink = (() => {
   const FUNCS = new Set(R.WORDS);
 
   const ch = g => g.c[g.i].c;
+  /** What a glyph shows: a multiplication-shaped glyph standing where a variable goes is the unknown x. */
+  const face = g => g.xv ? 'x' : ch(g);
   const glyph = (c, o) => Object.assign({t: 'g', c: typeof c === 'string' ? [{c, p: 1}] : c, i: 0}, o);
   const sup = body => ({t: 'sup', body});
   const frac = (num, den) => ({t: 'frac', num, den});
@@ -61,7 +63,8 @@ const Ink = (() => {
     const hooks = [];
     seq.forEach((n, k) => {
       if (n.t === 'g') {
-        const c = ch(n), w = M(c) * s;
+        n.xv = ch(n) === '*' && starIsX(seq, k);
+        const c = face(n), w = M(c) * s;
         Object.assign(n, {tx: x, ty: base, tsz: s, w});
         n.box = glyphBox(c, x, base, s, w);
         x += w + GAP * s;
@@ -73,8 +76,15 @@ const Ink = (() => {
       } else if (n.t === 'frac') {
         const fs = s * FRAC, nw = seqWidth(n.num, fs, M), dw = seqWidth(n.den, fs, M);
         const W = Math.max(nw, dw, .45 * s) + .3 * s, by = base - BAR_Y * s;
-        layoutSeq(n.num, x + (W - nw) / 2, by - .14 * s, fs, M);
-        layoutSeq(n.den, x + (W - dw) / 2, by + .14 * s + .55 * fs, fs, M);
+        // The numerator sits on the bar and the denominator hangs from it, whatever they hold (a fraction in a
+        // fraction is taller than a line of digits): lay each part out, then move it clear of the bar.
+        const place = (part, x0, y, clear) => {
+          layoutSeq(part, x0, y, fs, M);
+          const u = unionOf(part), d = !u ? 0 : clear < 0 ? Math.min(0, by + clear - u.y1) : Math.max(0, by + clear - u.y0);
+          if (d) layoutSeq(part, x0, y + d, fs, M);
+        };
+        place(n.num, x + (W - nw) / 2, by - .14 * s, -.08 * s);
+        place(n.den, x + (W - dw) / 2, by + .14 * s + .55 * fs, .08 * s);
         const m = .05 * s;   // side margin: the bar never touches its neighbours
         Object.assign(n, {tx: x + m, ty: by, tbw: W - 2 * m, ts: s, bar: {x0: x + m, x1: x + W - m, y: by}});
         const u = unionOf(n.num.concat(n.den));
@@ -85,8 +95,9 @@ const Ink = (() => {
         let end = n.body.length ? e - GAP * s + .04 * s : x + .56 * s;
         if (n.reach > BAR_MIN) end = Math.max(end, x + .5 * s + n.reach * s);   // the bar keeps the reach it was drawn with
         const top = Math.min(base - .8 * s, u ? u.y0 - .1 * s : Infinity);
-        Object.assign(n, {tx: x, ty: base, tsz: s, tvx: end, ttop: top, bar: {x0: x + .5 * s, x1: end, top, base}});
-        n.box = box(x, top, end, base + .05 * s);
+        const bot = Math.max(base, u ? u.y1 + .04 * s : base);   // a tall radicand (a fraction) is enclosed down to its foot
+        Object.assign(n, {tx: x, ty: base, tsz: s, tvx: end, ttop: top, tbot: bot, bar: {x0: x + .5 * s, x1: end, top, base: bot}});
+        n.box = box(x, top, end, bot + .05 * s);
         if (!hasBar(n)) hooks.push(k);
         x = Math.max(e, end + .1 * s);
       }
@@ -142,13 +153,27 @@ const Ink = (() => {
     const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
     for (const n of seq) {
       if (n.t === 'frac' && n.bar) {
-        const B = n.bar, fs = n.ts || s;
-        if (cx >= B.x0 - .15 * fs && cx <= B.x1 + .15 * fs) {
-          if (cy < B.y && B.y - cy < 1.4 * fs) return slot(n.num, b, c, fs * FRAC);
-          if (cy > B.y && B.y - cy > -1.6 * fs) return slot(n.den, b, c, fs * FRAC);
-        }
+        const B = n.bar, fs = n.ts || s, un = unionOf(n.num), ud = unionOf(n.den);
+        // A bar at least as wide as this fraction's, under its denominator or over its numerator, is a new fraction
+        // around this one ((1/2)/3), not one inside a part of it.
+        if (c === '-' && b.w >= .85 * (B.x1 - B.x0) && b.x0 <= B.x0 + .25 * fs && b.x1 >= B.x1 - .25 * fs &&
+          ((ud && cy > ud.y1 - .1 * fs) || (un && cy < un.y0 + .1 * fs))) continue;
+        // Each part reaches as far as its content does (a fraction in a fraction is tall). A symbol written just after the
+        // end of a part, wholly on that side of the bar and level with the part, extends it (the 4 of 14 written after
+        // 1/5 was typeset); the two bars of an = written after the fraction straddle its bar and are not level with a part.
+        // Only a part that ends in a symbol (not in a fraction of its own) is continued, by a symbol level with that one.
+        const ext = (part, above) => {
+          const last = part[part.length - 1], q = last && last.t !== 'frac' && bx(last);
+          return !!q && (above ? b.y1 < B.y - .04 * fs : b.y0 > B.y + .04 * fs) && cy > q.y0 + .1 * q.h &&
+            cy < q.y1 - (b.h < .3 * b.w ? .3 : .15) * q.h && b.x0 <= Math.min(q.x1, B.x1 + .3 * fs) + .8 * fs;
+        };
+        if (cx >= B.x0 - .15 * fs && cy < B.y && cy > Math.min(B.y - 1.4 * fs, un ? un.y0 - .4 * fs : Infinity) &&
+          (cx <= B.x1 + .15 * fs || ext(n.num, true))) return slot(n.num, b, c, fs * FRAC);
+        if (cx >= B.x0 - .15 * fs && cy > B.y && cy < Math.max(B.y + 1.6 * fs, ud ? ud.y1 + .5 * fs : -Infinity) &&
+          (cx <= B.x1 + .15 * fs || ext(n.den, false))) return slot(n.den, b, c, fs * FRAC);
       } else if (n.t === 'root' && n.bar && hasBar(n)) {
         const B = n.bar, rs = n.tsz || s;
+        if (c === '-' && (b.x0 < B.x0 - .25 * rs || b.x1 > B.x1 + .35 * rs)) continue;   // a bar reaching past the root: (√9+1)/2
         if (cx > B.x0 && cx <= B.x1 + .12 * rs && cy > B.top && cy < B.base + .3 * rs) return slot(n.body, b, c, rs);
       }
     }
@@ -289,6 +314,7 @@ const Ink = (() => {
   }
   /** Function words, look-alike letters and the constant e, read over each sequence (see Recognizer.wordfix). */
   function readWords(seq) {
+    for (const n of seq) if (n.t === 'g') n.word = false;   // re-read from scratch: a word that was erased is no word
     const view = seq.map(n => n.t === 'g' ? Object.assign(n, {b: bx(n), sup: false})
       : {c: [{c: n.t === 'sup' ? '^' : '§', p: 1}], i: 0, locked: true, sup: n.t === 'sup', b: bx(n)});
     R.wordfix(view);
@@ -307,8 +333,14 @@ const Ink = (() => {
     let num = '', word = '';
     const fN = () => { if (num) { out.push(num); num = ''; } };
     const fW = () => {
-      if (!word) return;
-      if (word === 'e' || word === 'x' || FUNCS.has(word)) out.push(word); else throw new Error('unknown word');
+      // A run of letters is read as function names, e and x, longest name first (sinx = sin x, xe = x e).
+      for (let i = 0; i < word.length;) {
+        let w = '';
+        for (const f of FUNCS) if (f.length > w.length && word.startsWith(f, i)) w = f;
+        if (!w && (word[i] === 'e' || word[i] === 'x')) w = word[i];
+        if (!w) throw new Error('unknown word');
+        out.push(w); i += w.length;
+      }
       word = '';
     };
     A.forEach((n, k) => {
@@ -317,10 +349,8 @@ const Ink = (() => {
         if (/[0-9.]/.test(c)) { fW(); num += c; return; }
         if (/[a-z]/.test(c)) { fN(); word += c; return; }
         fN(); fW();
-        if (c === '*') {
-          const nx = A[k + 1], pv = A[k - 1], nc = nx && nx.t === 'g' ? ch(nx) : '', pc = pv && pv.t === 'g' ? ch(pv) : '';
-          out.push(!nx || nx.t === 'sup' || '+-*/=)%'.includes(nc) || !pv || '+-*/=('.includes(pc) ? 'x' : '*');
-        } else out.push(c);
+        if (c === '*') out.push(starIsX(A, k) ? 'x' : '*');
+        else out.push(c);
         return;
       }
       fN(); fW();
@@ -339,11 +369,19 @@ const Ink = (() => {
     fN(); fW();
     return out;
   }
+  /**
+   * Is the multiplication-shaped glyph at seq[k] the unknown x? It is when it cannot be a multiplication: at either
+   * end, before an exponent, or next to an operator ("2×3" multiplies; "2× + 1", "×²", "×=4" are x).
+   */
+  function starIsX(seq, k) {
+    const nx = seq[k + 1], pv = seq[k - 1], nc = nx && nx.t === 'g' ? ch(nx) : '', pc = pv && pv.t === 'g' ? ch(pv) : '';
+    return !nx || nx.t === 'sup' || (!!nc && '+-*/=)%!'.includes(nc)) || !pv || (!!pc && '+-*/=('.includes(pc));
+  }
   const SUPS = '⁰¹²³⁴⁵⁶⁷⁸⁹';
   /** Plain-text form (history, sharing). */
   function text(seq) {
     return seq.map(n => {
-      if (n.t === 'g') { const c = ch(n); return c === '*' ? '×' : c === '/' ? '÷' : c; }
+      if (n.t === 'g') { const c = ch(n); return c === '*' ? (starIsX(seq, seq.indexOf(n)) ? 'x' : '×') : c === '/' ? '÷' : c; }
       if (n.t === 'sup') { const t = text(n.body); return /^[0-9]+$/.test(t) ? [...t].map(d => SUPS[d]).join('') : '^(' + t + ')'; }
       if (n.t === 'frac') return '(' + text(n.num) + ')/(' + text(n.den) + ')';
       return n.body.length ? '√(' + text(n.body) + ')' : '√';
@@ -380,7 +418,7 @@ const Ink = (() => {
     return out;
   }
 
-  return Object.freeze({GAP, SUP, RAISE, FRAC, BAR_MIN, ch, glyph, sup, frac, root, bx, box, union, unionOf, hasBar, children,
+  return Object.freeze({GAP, SUP, RAISE, FRAC, BAR_MIN, ch, face, starIsX, glyph, sup, frac, root, bx, box, union, unionOf, hasBar, children,
     walk, count, glyphBox, layoutSeq, seqWidth, raised, slot, insert, contentAbove, addFraction, addRoot, extendRoot, findSeq, overwritten,
     barBox, signBox, erase, contextFix, readAll, tokens, text, serialize, deserialize, fromLegacy});
 })();

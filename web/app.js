@@ -42,15 +42,17 @@ const allNodes=L=>visuals(L.seq,visuals(L.ans));
 function layoutLine(L){
  const F=L.F,w=Ink.layoutSeq(L.seq,0,0,F,M)+(L.ans.length?.22*F+Ink.layoutSeq(L.ans,0,0,F,M):0);
  let x0=L.x0,f=Math.min(1,(SW-24-x0)/Math.max(w,1));if(f<.6){x0=12;f=Math.min(1,(SW-24)/Math.max(w,1))}
- const s=F*f,base=Math.min(SH-24,Math.max(s*.95+12,L.base)),e=Ink.layoutSeq(L.seq,x0,base,s,M);
- if(L.ans.length)Ink.layoutSeq(L.ans,e+.16*s,base,s,M);
- L.s=s;L.y=base;L.box=Ink.unionOf(L.seq.concat(L.ans));
+ const s=F*f,put=b=>{const e=Ink.layoutSeq(L.seq,x0,b,s,M);if(L.ans.length)Ink.layoutSeq(L.ans,e+.16*s,b,s,M);return Ink.unionOf(L.seq.concat(L.ans))};
+ let base=Math.min(SH-24,Math.max(s*.95+12,L.base)),u=put(base);
+ // a tall line (a fraction in a fraction, a root over a fraction) is moved so that it stays on the screen
+ if(u){const d=u.y0<8?8-u.y0:u.y1>SH-8?Math.max(8-u.y0,SH-8-u.y1):0;if(d){base+=d;u=put(base)}}
+ L.s=s;L.y=base;L.box=u;
  for(const n of allNodes(L))if(n.x===undefined)snap(n)}
 /** Puts a node directly at its target, invisible, ready to fade in. */
-function snap(n){n.x=n.tx;n.y=n.ty;n.sz=n.tsz||n.ts;n.bw=n.tbw;n.vx=n.tvx;n.top=n.ttop;n.a=0;n.ta=1}
+function snap(n){n.x=n.tx;n.y=n.ty;n.sz=n.tsz||n.ts;n.bw=n.tbw;n.vx=n.tvx;n.top=n.ttop;n.bot=n.tbot;n.a=0;n.ta=1}
 
 /* ---------- animation ---------- */
-const PAIRS=[['x','tx'],['y','ty'],['sz','tsz'],['bw','tbw'],['vx','tvx'],['top','ttop']];
+const PAIRS=[['x','tx'],['y','ty'],['sz','tsz'],['bw','tbw'],['vx','tvx'],['top','ttop'],['bot','tbot']];
 function stepN(n,dt,now){if(now<(n.delay||0))return true;const k=1-Math.exp(-dt*11),ka=1-Math.exp(-dt*10);let r=false;
  for(const[p,t]of PAIRS){const v=n[t];if(v===undefined)continue;if(n[p]===undefined)n[p]=v;n[p]+=(v-n[p])*k;if(Math.abs(v-n[p])>.25)r=true;else n[p]=v}
  if(n.ta===undefined)n.ta=1;if(n.a===undefined)n.a=0;n.a+=(n.ta-n.a)*ka;if(Math.abs(n.ta-n.a)>.01)r=true;else n.a=n.ta;
@@ -70,9 +72,9 @@ function drawInk(s,a){if(a<=.01||!s.length)return;ctx.globalAlpha=a;ctx.strokeSt
  if(s.length==1){ctx.beginPath();ctx.arc(s[0][0],s[0][1],2.6,0,7);ctx.fill()}else strokePath(s);ctx.globalAlpha=1}
 function drawNode(n){const a=Math.max(0,Math.min(1,n.a));if(a<=.005&&!n.ink)return;const col=n.ans?palette.accent:palette.ink;ctx.globalAlpha=a;ctx.strokeStyle=ctx.fillStyle=col;ctx.lineCap=ctx.lineJoin='round';
  if(n.t=='frac'){ctx.lineWidth=Math.max(2.5,(n.ts||60)*.05);ctx.beginPath();ctx.moveTo(n.x,n.y);ctx.lineTo(n.x+n.bw,n.y);ctx.stroke()}
- else if(n.t=='root'){const s=n.sz,x=n.x,y=n.y,top=n.top;ctx.lineWidth=Math.max(2,s*.055);ctx.beginPath();ctx.moveTo(x+.02*s,y-.36*s);ctx.lineTo(x+.1*s,y-.43*s);ctx.lineTo(x+.26*s,y-.02*s);ctx.lineTo(x+.5*s,top);ctx.lineTo(Math.max(n.vx,x+.56*s),top);ctx.stroke()}
+ else if(n.t=='root'){const s=n.sz,x=n.x,y=Math.max(n.y,n.bot||n.y),top=n.top;ctx.lineWidth=Math.max(2,s*.055);ctx.beginPath();ctx.moveTo(x+.02*s,y-.36*s);ctx.lineTo(x+.1*s,y-.43*s);ctx.lineTo(x+.26*s,y-.02*s);ctx.lineTo(x+.5*s,top);ctx.lineTo(Math.max(n.vx,x+.56*s),top);ctx.stroke()}
  else{ctx.font=Math.round(n.sz)+'px '+FONT;ctx.textBaseline='alphabetic';
-  if(n.ot>0&&n.old){ctx.globalAlpha=a*n.ot;ctx.fillText(disp(n.old),n.x,n.y);ctx.globalAlpha=a*(1-n.ot)}ctx.fillText(disp(ch(n)),n.x,n.y)}
+  if(n.ot>0&&n.old){ctx.globalAlpha=a*n.ot;ctx.fillText(disp(n.old),n.x,n.y);ctx.globalAlpha=a*(1-n.ot)}ctx.fillText(disp(Ink.face(n)),n.x,n.y)}
  ctx.globalAlpha=1;
  if(n.ink){if(n.a<.99){const k=Math.max(0,1-n.a*1.1);n.ink.forEach(s=>drawInk(s.full||s,k))}else n.ink=null}}
 function render(now){ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);ctx.setTransform(DPR,0,0,DPR,0,0);
@@ -82,8 +84,8 @@ function render(now){ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv
  if(cur)drawInk(cur.length>1&&(cur.raw||cur.pred)?cur.concat(cur.raw?[cur.raw]:[],cur.pred||[]):cur,1);   // live stroke up to the pen tip (+ predicted points; never stored)
  if(drag){ctx.font='44px '+FONT;const w=ctx.measureText(drag.text).width+30,x=drag.x-w/2,y=drag.y-86;ctx.save();ctx.shadowColor=palette.dragShadow;ctx.shadowBlur=16;ctx.shadowOffsetY=4;ctx.fillStyle=palette.dragBackground;ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,60,16):ctx.rect(x,y,w,60);ctx.fill();ctx.restore();ctx.strokeStyle=palette.accent;ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,60,16):ctx.rect(x,y,w,60);ctx.stroke();ctx.fillStyle=palette.accent;ctx.textBaseline='middle';ctx.fillText(drag.text,x+15,y+32);ctx.textBaseline='alphabetic'}}
 /** On-screen box of a node right now (hit tests for taps and drags). */
-function nowBox(n){if(n.t=='frac')return{x0:n.x,x1:n.x+n.bw,y0:n.y-.12*n.ts,y1:n.y+.12*n.ts};if(n.t=='root')return{x0:n.x,x1:Math.max(n.vx,n.x+.56*n.sz),y0:n.top,y1:n.y};
- const b=Ink.glyphBox(ch(n),n.x,n.y,n.sz,n.w||M(ch(n))*n.sz);return{x0:b.x0,x1:b.x1,y0:Math.min(b.y0,n.y-.62*n.sz),y1:Math.max(b.y1,n.y+.12*n.sz)}}
+function nowBox(n){if(n.t=='frac')return{x0:n.x,x1:n.x+n.bw,y0:n.y-.12*n.ts,y1:n.y+.12*n.ts};if(n.t=='root')return{x0:n.x,x1:Math.max(n.vx,n.x+.56*n.sz),y0:n.top,y1:Math.max(n.y,n.bot||n.y)};
+ const c=Ink.face(n),b=Ink.glyphBox(c,n.x,n.y,n.sz,n.w||M(c)*n.sz);return{x0:b.x0,x1:b.x1,y0:Math.min(b.y0,n.y-.62*n.sz),y1:Math.max(b.y1,n.y+.12*n.sz)}}
 
 /* ---------- answers ---------- */
 function computeAns(L){const top=L.seq[L.seq.length-1],trailingEquals=!!(top&&top.t=='g'&&ch(top)=='=');let tokens;
@@ -107,13 +109,13 @@ function region(L){let r=null;
  if(L.ink.length){const q=L.ink.map(bb).reduce(un),m=Math.max(.4*q.h+10,35);r=r?{y0:Math.min(r.y0,q.y0-m),y1:Math.max(r.y1,q.y1+m)}:{y0:q.y0-m,y1:q.y1+m};
   // A fraction bar still in ink: the part not yet written (often the denominator, written right after the bar, before
   // anything is typeset) belongs to this line, as it does once the fraction is typeset (see the frac case above).
-  for(const s of L.ink){if(!isBar(s))continue;const b=bb(s),y=(b.y0+b.y1)/2,o=L.ink.filter(t=>t!==s).map(bb),h=Math.max(50,...o.map(t=>t.h));
+  for(const s of L.ink){if(!isBar(s))continue;const b=bb(s),y=(b.y0+b.y1)/2,o=L.ink.filter(t=>t!==s&&!isBar(t)).map(bb),h=Math.max(50,.6*b.w,...o.map(t=>t.h));
    if(!o.some(t=>t.y0>y))r.y1=Math.max(r.y1,y+1.8*h);if(!o.some(t=>t.y1<y))r.y0=Math.min(r.y0,y-1.8*h)}}
  return r}
 /** A line whose fraction bar is still in ink, with nothing yet written under it, takes a stroke that starts under that bar
  *  (overlapping it horizontally), however tall the stroke: a large denominator's middle can sit far below the bar. */
 function underInkBar(L,b){for(const s of L.ink){if(!isBar(s))continue;const q=bb(s),y=(q.y0+q.y1)/2,o=L.ink.filter(t=>t!==s).map(bb);
-  if(o.some(t=>t.y0>y))continue;const h=Math.max(50,...o.map(t=>t.h)),pad=.25*q.w;
+  if(o.some(t=>t.y0>y))continue;const h=Math.max(50,.6*q.w,...o.filter(t=>t.h>.2*t.w).map(t=>t.h)),pad=.25*q.w;
   if(b.x1>q.x0-pad&&b.x0<q.x1+pad&&b.y0>y-10&&b.y0-y<1.8*h)return true}return false}
 function attach(s){const b=bb(s),cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2;let best=null,bd=1e9;
  for(const L of lines)if(underInkBar(L,b)){L.ink.push(s);return}
@@ -132,18 +134,24 @@ function radical(s){const n=s.length;if(n<8)return null;let v=0;for(let i=0;i<n;
  const H=s[v][1]-s[a][1];if(H<28)return null;
  if(!(s[0][1]<s[v][1]-.15*H&&s[0][1]>s[a][1]&&s[v][0]>s[0][0]&&s[a][0]>s[v][0]+.15*H))return null;
  if(tx<.15*H&&s[0][1]<s[a][1]+.35*H)return null;   // without a bar, the tick must be clearly shorter than the rise (else it is a v or a u)
+ if(crosses(s.slice(0,v+1),s.slice(v)))return null;   // a root sign never crosses itself (a looped cursive x does)
  const main=s.slice(0,a+1);main.vin={x0:s[a][0],x1:s[a][0]+tx};main.full=s;main.hook=tx<.25*H;return main}
+/** Do polylines p and q cross (ignoring where they meet end to start)? */
+function crosses(p,q){const X=(a,b,c,d)=>{const o=(u,v,w)=>(v[0]-u[0])*(w[1]-u[1])-(v[1]-u[1])*(w[0]-u[0]);return o(a,b,c)*o(a,b,d)<0&&o(c,d,a)*o(c,d,b)<0};
+ for(let i=0;i+1<p.length-2;i++)for(let j=2;j+1<q.length;j++)if(X(p[i],p[i+1],q[j],q[j+1]))return true;return false}
 /* A root written in several pen-downs (hook, then bar; or tick-and-down, then rise-and-bar) is read as one stroke, but only when the
  * result is a root WITH a bar: two ordinary strokes (a 1 and a slash) must never be fused into a hook. */
-function mergeRoot(s){const f=s[0];
+function mergeRoot(s){const f=s[0],own=radical(s);if(own&&!own.hook)return null;   // already a whole root: never fuse it with the stroke before (the bar of a +)
  for(const L of lines)for(let k=L.ink.length-1;k>=Math.max(0,L.ink.length-2);k--){const t=L.ink[k],raw=t.full||t;if(t.vin&&!t.hook)continue;
   const e=raw[raw.length-1],bt=bb(raw);if(Math.hypot(f[0]-e[0],f[1]-e[1])>Math.max(30,.4*bt.h))continue;
   const r=radical(raw.concat(s));if(r&&!r.hook){L.ink.splice(k,1);if(!L.ink.length&&!L.seq.length)lines.splice(lines.indexOf(L),1);return r}}
  return null}
-/* A bar drawn after a bare root sign was already typeset: it gives the root its reach (what is under it becomes the radicand). */
-function lateBar(s){const b=bb(s);if(b.w<30||b.h>.25*b.w)return false;
- for(const L of lines)for(const r of visuals(L.seq)){if(r.t!='root'||Ink.hasBar(r))continue;const top=r.ty-.8*r.tsz;
-  if(Math.abs(s[0][0]-(r.tx+.5*r.tsz))<.45*r.tsz&&Math.abs(s[0][1]-top)<.35*r.tsz){Ink.extendRoot(L.seq,r,Math.max(0,b.x1-(r.tx+.5*r.tsz))/r.tsz);relayout(L);return true}}
+/* A bar drawn after a root sign was typeset. From the corner of a bare sign it gives the root its reach; from the end of an
+ * existing bar (or over it) it lengthens it. Either way what is under the new bar becomes the radicand (√(1)6 → √(16)). */
+function lateBar(s){const b=bb(s);if(b.w<30||b.h>.25*b.w)return false;const a=s[0][0]<s[s.length-1][0]?s[0]:s[s.length-1];
+ for(const L of lines)for(const r of visuals(L.seq)){if(r.t!='root'||!r.bar||r.tsz===undefined)continue;const z=r.tsz,x0=r.tx+.5*z,top=r.ttop,reach=Math.max(0,b.x1-x0)/z;
+  const fromCorner=Math.abs(a[0]-x0)<.45*z&&Math.abs(a[1]-top)<.35*z,fromEnd=Ink.hasBar(r)&&Math.abs(a[0]-r.bar.x1)<.6*z&&Math.abs((b.y0+b.y1)/2-top)<.3*z;
+  if(Ink.hasBar(r)?(fromCorner||fromEnd)&&b.x1>r.bar.x1+.25*z:fromCorner){Ink.extendRoot(L.seq,r,Ink.hasBar(r)?Math.max(r.reach,reach):reach);relayout(L);return true}}
  return false}
 
 /* ---------- erasing ---------- */
@@ -221,6 +229,7 @@ function touches(s,src){const r=Math.max(8,.1*Math.max(...src.map(t=>{const q=bb
  * typeset −, or a dot over a typeset 1 or l — so a symbol can still be completed after other symbols were written. */
 function joins(s,n,now,late){const b=bb(s),c=ch(n),inkShown=now-n.tc<900;
  if(inkShown&&touches(s,n.src))return true;
+ if(!late&&n.src.length==1&&Recognizer.cursiveX(n.src[0],s))return true;   // the second arc of a cursive x, )(
  const P=late?null:resamp(s,4);
  for(const q of inkShown?[n.rb,n.box]:[n.box]){if(!q)continue;
   const cx=(q.x0+q.x1)/2,cy=(q.y0+q.y1)/2;
@@ -247,38 +256,55 @@ async function splitCursive(L){
 function fractionBars(L,S){const info=S.map(s=>({s,b:bb(s)})),ref=Math.max(40,...info.map(o=>Math.max(o.b.w,o.b.h))),big=o=>Math.max(o.b.w,o.b.h)>=.2*ref,out=[];
  for(const o of info){if(!isBar(o.s))continue;const y=(o.b.y0+o.b.y1)/2,inr=p=>p!==o&&(p.b.x0+p.b.x1)/2>=o.b.x0-12&&(p.b.x0+p.b.x1)/2<=o.b.x1+12;
   if(info.some(p=>inr(p)&&p.b.y0<y-4&&p.b.y1>y+4))continue;                                        // crossed: part of + or π
-  if(info.some(p=>inr(p)&&isBar(p.s)&&p.b.w>.6*o.b.w&&Math.abs((p.b.y0+p.b.y1)/2-y)<.8*o.b.w))continue;   // two bars: =
+  if(info.some(p=>{if(!inr(p)||!isBar(p.s)||p.b.w<.6*o.b.w||p.b.w>o.b.w/.6)return false;const py=(p.b.y0+p.b.y1)/2;if(Math.abs(py-y)>=.8*o.b.w)return false;
+   const lo=Math.min(py,y),hi=Math.max(py,y);return!info.some(q=>q!==o&&q!==p&&inr(q)&&(q.b.y0+q.b.y1)/2>lo&&(q.b.y0+q.b.y1)/2<hi)}))continue;   // two bars with nothing between them: =
   const H=Math.max(30,...info.filter(p=>inr(p)&&big(p)).map(p=>p.b.h)),
    up=info.some(p=>inr(p)&&big(p)&&p.b.y1<=y+10&&y-p.b.y1<1.3*H),dn=info.some(p=>inr(p)&&big(p)&&p.b.y0>=y-10&&p.b.y0-y<1.3*H);
   if(up||dn||Ink.contentAbove(L.seq,o.b,L.s||L.F))out.push({s:o.s,b:o.b,up,dn})}
  return out}
+/** Pairs of short flat strokes one above the other with nothing between them (the bars of =): stroke -> box of the pair. */
+function eqPairs(S){const info=S.map(s=>({s,b:bb(s)})),flat=o=>o.b.w>=8&&o.b.h<.3*o.b.w,out=new Map();
+ for(const o of info)for(const p of info){if(p===o||!flat(o)||!flat(p)||out.has(o.s)||out.has(p.s))continue;const a=o.b,b=p.b,ov=Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0);
+  const ya=(a.y0+a.y1)/2,yb=(b.y0+b.y1)/2;if(ov<.6*Math.min(a.w,b.w)||Math.max(a.w,b.w)>2*Math.min(a.w,b.w)||Math.abs(ya-yb)>=.8*Math.max(a.w,b.w))continue;
+  if(info.some(q=>q!==o&&q!==p&&(q.b.y0+q.b.y1)/2>Math.min(ya,yb)&&(q.b.y0+q.b.y1)/2<Math.max(ya,yb)&&(q.b.x0+q.b.x1)/2>Math.max(a.x0,b.x0)&&(q.b.x0+q.b.x1)/2<Math.min(a.x1,b.x1)))continue;
+  const u=un(a,b);out.set(o.s,u);out.set(p.s,u)}
+ return out}
 /** Which part of the expression a stroke is written in: above / below a new or typeset fraction bar, an exponent, or the line. */
 function zoneOf(L,b,bars){const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,H=L.s||L.F;
- for(let i=0;i<bars.length;i++){const o=bars[i].b,y=(o.y0+o.y1)/2;if(cx>=o.x0-12&&cx<=o.x1+12){if(cy<y&&y-cy<1.4*H)return'n'+i;if(cy>y&&cy-y<1.6*H)return'd'+i}}
+ // which side of every new bar above or below it the stroke is on: strokes of different parts of nested fractions never share a zone
+ const side=bars.map(o=>{const q=o.b,y=(q.y0+q.y1)/2;return cx>=q.x0-12&&cx<=q.x1+12&&Math.abs(cy-y)<2.5*H?cy<y?'n':'d':'-'}).join('');
+ if(/[nd]/.test(side))return side;
  const at=Ink.slot(L.seq,b,'',H);return at.sup?'sup':at.seq}
 async function doRecognize(){
  for(const L of lines.slice())if(L.ink.length){reopenRecent(L);await splitCursive(L)}
  const jobs=[];
  for(const L of lines){if(!L.ink.length)continue;const S=L.ink.slice(),bars=fractionBars(L,S),barSet=new Set(bars.map(o=>o.s)),zones=new Map(),items=[];
-  for(const st of S){if(barSet.has(st))continue;const z=zoneOf(L,bb(st),bars);if(!zones.has(z))zones.set(z,[]);zones.get(z).push(st)}
+  const pair=eqPairs(S.filter(t=>!barSet.has(t)));   // the two bars of an = are placed as one: never one bar in a numerator, the other outside
+  for(const st of S){if(barSet.has(st))continue;const z=zoneOf(L,pair.get(st)||bb(st),bars);if(!zones.has(z))zones.set(z,[]);zones.get(z).push(st)}
   const G=[...zones.values()].flatMap(z=>Recognizer.groupStrokes(z));   // strokes of a numerator, a denominator or an exponent never form one symbol with others
   for(const o of bars)items.push({kind:'bar',strokes:[o.s],b:o.b,up:o.up,dn:o.dn});
   for(const g of G){const b=g.b,rs=g.s.find(t=>t.vin);
-   if(g.tiny&&G.length>1||Math.max(b.w,b.h)<16)items.push({kind:'dot',strokes:g.s,b});else items.push({kind:'sym',strokes:g.s,b,vin:rs&&rs.vin,hook:rs&&rs.hook})}
+   if(g.tiny&&G.length>1||Math.max(b.w,b.h)<16)items.push({kind:'dot',strokes:g.s,b});else items.push({kind:'sym',strokes:g.s,b,vin:rs&&rs.vin,hook:rs&&rs.hook,cx:g.x})}
   jobs.push({L,items})}
- await Promise.all(jobs.flatMap(j=>j.items.filter(it=>it.kind=='sym').map(async it=>{const r=await classify(it.strokes);it.x=r.x;it.cands=r.cands})));
+ await Promise.all(jobs.flatMap(j=>j.items.filter(it=>it.kind=='sym').map(async it=>{const r=await classify(it.strokes);it.x=r.x;it.cands=r.cands;
+  if(it.cx)it.cands=[{c:'x',p:.9}].concat(r.cands.filter(o=>o.c!='x').map(o=>({c:o.c,p:o.p*.1}))).slice(0,5)})));   // a cursive x, )(
+ for(const j of jobs)for(const it of j.items.slice())if(it.kind=='sym'&&closeOpen(j.L,it,j.items)){   // ")(" between two brackets, not an x
+  const[a,b]=it.strokes.slice().sort((p,q)=>bb(p).x0-bb(q).x0),k=j.items.indexOf(it),two=await Promise.all([a,b].map(async t=>{const r=await classify([t]);return{kind:'sym',strokes:[t],b:bb(t),x:r.x,cands:r.cands}}));
+  j.items.splice(k,1,...two)}
  for(const{L,items}of jobs){if(!lines.includes(L))continue;
   const live=items.filter(it=>it.strokes.every(s=>L.ink.includes(s)));if(!live.length)continue;
   const used=new Set(live.flatMap(it=>it.strokes));L.ink=L.ink.filter(s=>!used.has(s));
-  const isNew=!L.seq.length,s=isNew?L.F:L.s,tc=performance.now(),fresh=[];
+  const isNew=!L.seq.length,tc=performance.now(),fresh=[];
   if(isNew)startLine(L,live);
+  const s=isNew?L.F:L.s;   // after startLine: a new line's size comes from what was just written
   const mark=(n,it)=>{Object.assign(n,{raw:it.b,ink:it.strokes,src:it.strokes,rb:it.b,tc});fresh.push(n);return n};
   // 1. fraction bars (what is written above / below them is placed into them afterwards)
-  for(const it of live.filter(it=>it.kind=='bar')){const f=Ink.addFraction(L.seq,it.b,s,it.up,it.dn);
+  for(const it of live.filter(it=>it.kind=='bar').sort((p,q)=>q.b.w-p.b.w)){const f=Ink.addFraction(L.seq,it.b,s,it.up,it.dn);   // widest first: a bar inside a part of a wider fraction goes into that part
    if(f)mark(f,it);else Ink.insert(L.seq,mark(Ink.glyph('-',{fresh:false}),it),s)}
   // 2. root signs (what is under their bar goes inside)
   const syms=live.filter(it=>it.kind!='bar').sort((a,b)=>a.b.x0-b.b.x0);
-  for(const it of syms.filter(isRootItem)){const b=it.b,sz=Math.max(24,b.h/.8),r=Ink.root([],it.vin?Math.max(0,it.vin.x1-it.vin.x0)/sz:0);
+  // the drawn bar is measured in the line's font size, so that the typeset bar is as long as the drawn one
+  for(const it of syms.filter(isRootItem)){const b=it.b,sz=Math.max(24,b.h/.8),r=Ink.root([],it.vin?Math.max(0,it.vin.x1-it.vin.x0)/s:0);
    r.bar={x0:it.vin?it.vin.x0:b.x1,x1:it.vin?it.vin.x1:b.x1,top:b.y0,base:b.y1};r.raw0=sz;r.vx0=it.vin?it.vin.x1:b.x1;Ink.addRoot(L.seq,mark(r,it),s)}
   // 3. everything else, left to right: over an existing symbol it replaces it, otherwise it goes where it was written
   for(const it of syms.filter(it=>!isRootItem(it))){
@@ -289,11 +315,22 @@ async function doRecognize(){
   if(!isNew)L.x0=Math.min(L.x0,...fresh.filter(n=>L.seq.includes(n)).map(n=>n.raw.x0));
   layoutLine(L);fresh.forEach(fromInk);updateAns(L)}
  kick()}
+/** Is the two-arc symbol `it`, ")(", a closing bracket followed by an opening one rather than a cursive x? Brackets are taller
+ *  than the digits around them (an x is not), and a ")" has something to close. */
+function closeOpen(L,it,items){if(it.strokes.length!=2)return false;const[p,q]=it.strokes.slice().sort((u,v)=>bb(u).x0-bb(v).x0);
+ if(Recognizer.arcSide(p)!='r'||Recognizer.arcSide(q)!='l')return false;
+ const dg=[],seen=[];Ink.walk(L.seq,n=>{const b=Ink.bx(n);if(n.t!='g'||!b)return;const c=ch(n);if(/[0-9]/.test(c)&&n.box)dg.push(b.h);if(c=='('||c==')')seen.push({c,x:(b.x0+b.x1)/2})});
+ for(const o of items)if(o!==it&&o.cands){const c=o.cands[0].c;if(/[0-9]/.test(c))dg.push(o.b.h);if(c=='('||c==')')seen.push({c,x:(o.b.x0+o.b.x1)/2})}
+ const h=it.b.h,med=dg.length?dg.sort((u,v)=>u-v)[dg.length>>1]:0;
+ if(med&&h>=1.12*med)return true;                                                  // taller than the digits: brackets
+ if(med&&h<=.95*med&&it.cx)return false;                                           // x-height and round: an x
+ let open=0;for(const o of seen)if(o.x<it.b.x0)open+=o.c=='('?1:-1;return open>0&&!it.cx}
 const isRootItem=it=>it.kind=='sym'&&it.vin&&(!it.hook||it.cands.findIndex(o=>o.c=='√')===0||(it.cands.find(o=>o.c=='√')||{p:0}).p*3>=it.cands[0].p);
 /** Size and baseline of a new line, from the digits just written (or a fraction bar). */
 function startLine(L,items){const med=a=>a.slice().sort((p,q)=>p-q)[a.length>>1],dg=items.filter(it=>it.kind=='sym'&&/[0-9]/.test(it.cands[0].c)).map(it=>it.b),bar=items.find(it=>it.kind=='bar');
- const hs=dg.filter(b=>!bar||b.y1<(bar.b.y0+bar.b.y1)/2-.3*b.h||b.y0>(bar.b.y0+bar.b.y1)/2+.3*b.h);
- L.F=Math.max(56,Math.min(170,dg.length?med(dg.map(b=>b.h))/(bar&&hs.length===dg.length?.55*.8:.55):80));
+ const hs=dg.filter(b=>!bar||b.y1<(bar.b.y0+bar.b.y1)/2-.3*b.h||b.y0>(bar.b.y0+bar.b.y1)/2+.3*b.h),rt=items.filter(it=>it.kind=='sym'&&isRootItem(it));
+ // no digit yet: a root sign is .8 of the font size tall (the radicand will be written at that size, under its bar)
+ L.F=Math.max(56,Math.min(170,dg.length?med(dg.map(b=>b.h))/(bar&&hs.length===dg.length?.55*.8:.55):rt.length?Math.min(...rt.map(it=>it.b.h))/.8:80));
  L.base=bar?(bar.b.y0+bar.b.y1)/2+.28*L.F:dg.length?med(dg.map(b=>b.y1)):(items[0].b.y0+items[0].b.y1)/2+.3*L.F;
  L.x0=Math.min(...items.map(it=>it.b.x0))}
 /** A freshly read node starts where its ink was, at the ink's size, then glides to its typeset place. */
@@ -357,7 +394,7 @@ function drop(d){const x=d.x,y=d.y;if(y>SH-70){if(!d.fromMem)memAdd(d.text);retu
 /* ---------- history ---------- */
 let HIST=Store.cleanHistory(Store.loadArray(localStorage,'inkhist'));
 const histPersist=()=>{Store.save(localStorage,'inkhist',HIST)};
-const textOf=L=>Ink.text(L.seq).replace(/=+$/,'').trim();
+const textOf=L=>{const t=Ink.text(L.seq).replace(/=+$/,'').trim();return t.length>400?t.slice(0,399)+'…':t};   // history keeps at most 400 characters (Store.cleanHistory)
 window.histSave=function(L){if(!L.seq.length)return;L.hid=L.hid||Date.now()+'-'+Math.random().toString(36).slice(2,6);clearTimeout(L.ht);
  L.ht=setTimeout(()=>{const r=computeAns(L);if(!r||!lines.includes(L))return;const e={id:L.hid,ts:Date.now(),tree:Ink.serialize(L.seq),F:L.F,ans:r.text,text:textOf(L)},i=HIST.findIndex(h=>h.id==L.hid);
   if(i>=0)HIST[i]=e;else HIST.unshift(e);HIST=HIST.slice(0,100);histPersist()},1500)};

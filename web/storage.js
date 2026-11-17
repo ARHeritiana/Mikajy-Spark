@@ -73,7 +73,7 @@ const Store = (() => {
   /* Expression trees (see ink.js): glyph {c}, exponent {s: [...]}, fraction {n: [...], d: [...]}, root {r: [...], k: reach}.
    * Rebuilt node by node; anything unexpected, too deep (> 8) or too large (> 200 nodes) rejects the whole tree. */
   function cleanTree(list) {
-    let budget = 200;
+    let budget = 400;   // nodes: a long line of fractions and roots must still reopen from history
     const seq = (a, depth) => {
       if (!Array.isArray(a) || depth > 8 || a.length > budget) return null;
       const out = [];

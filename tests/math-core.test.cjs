@@ -83,7 +83,7 @@ test('trigonometric rounding noise is removed but real small values survive', ()
 test('hostile input stays bounded', () => {
   const deep = [...Array(70).fill('('), '1', ...Array(70).fill(')')];
   fails(() => v(deep), 'unsupported');
-  fails(() => v(Array(200).fill('1')), 'unsupported');
+  fails(() => v(Array(401).fill('1')), 'unsupported');   // more than MAX_TOKENS
   assert.throws(() => v('not-an-array'), MathCore.MathError);
   fails(() => v(['9', '!', '!', '!', '!']), 'undefined'); // 9!!!! overflows the factorial domain
 });

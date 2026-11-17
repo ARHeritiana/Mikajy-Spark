@@ -120,9 +120,82 @@ test('trees survive storage; hostile or oversized trees are rejected; old flat h
   let deep = [{c: '1'}];
   for (let i = 0; i < 12; i++) deep = [{s: deep}];
   assert.equal(Store.cleanTree(deep), null);
-  assert.equal(Store.cleanTree(Array.from({length: 300}, () => ({c: '1'}))), null);
+  assert.equal(Store.cleanTree(Array.from({length: 401}, () => ({c: '1'}))), null);   // more than 400 nodes
   const hist = Store.cleanHistory([{id: 'a', ts: 1, ans: '=8', text: '2³', tree: saved, junk: 1}, {id: 'b', ts: 1, ans: '=1', text: '1', tree: [{q: 1}]}]);
   assert.deepEqual(hist.map(h => h.id), ['a']);
   const legacy = [{c: '2'}, {c: '3', sup: 1}, {c: '+'}, {c: '§', fp: 'bar', fid: 'f'}, {c: '1', fp: 'n', fid: 'f'}, {c: '4', fp: 'd', fid: 'f'}, {c: '√', cover: 1}, {c: '9'}];
   assert.equal(text(Ink.fromLegacy(legacy)), '2³+(1)/(4)√(9)');
+});
+
+/* ---- Long expressions: fractions in fractions, roots over fractions, parts added later ---------------------------- */
+const fracAt = (num, den, x0, x1, y) => Object.assign(Ink.frac(num, den), {bar: {x0, x1, y}, raw: box(x0, y - 4, x1, y + 4), ts: 80});
+
+test('a fraction in a fraction is laid out clear of the outer bar, above and below', () => {
+  const inner = () => Ink.frac([Ink.glyph('1')], [Ink.glyph('2')]);
+  for (const [num, den] of [[[inner()], [Ink.glyph('4')]], [[Ink.glyph('4')], [inner()]]]) {
+    const f = Ink.frac(num, den), seq = typeset([f]), y = f.bar.y;
+    assert.ok(Ink.unionOf(f.num).y1 < y, 'numerator crosses the bar');
+    assert.ok(Ink.unionOf(f.den).y0 > y, 'denominator crosses the bar');
+    assert.equal(Ink.tokens(seq).join(''), num[0].t === 'frac' ? '((((1)/(2)))/(4))' : '((4)/(((1)/(2))))');
+  }
+});
+
+test('a bar wider than a typeset fraction, under it, makes a fraction of the fraction; a short one under the denominator nests', () => {
+  const outer = typeset([Ink.frac([Ink.glyph('1')], [Ink.glyph('2')])]), f = outer[0], u = Ink.unionOf(outer);
+  Ink.addFraction(outer, box(u.x0 - 10, u.y1 + 15, u.x1 + 10, u.y1 + 17), 80, false, false);
+  assert.equal(text(outer), '((1)/(2))/()');
+  const inner = typeset([Ink.frac([Ink.glyph('1')], [Ink.glyph('2')])]), d = inner[0].den[0].box;
+  Ink.addFraction(inner, box(d.x0 - 4, d.y1 + 8, d.x1 + 4, d.y1 + 10), 80, false, false);
+  assert.equal(text(inner), '(1)/((2)/())');
+  assert.ok(f.bar && Ink.contentAbove(typeset([Ink.frac([Ink.glyph('1')], [Ink.glyph('2')])]), box(0, 200, 10, 202), 80) === false);
+});
+
+test('fraction bars written together nest by width, in any order', () => {
+  for (const order of [[0, 1], [1, 0]]) {
+    const seq = [], bars = [box(90, 310, 260, 310), box(120, 215, 220, 215)];
+    for (const k of order.map(i => i).sort((i, j) => bars[j].w - bars[i].w)) Ink.addFraction(seq, bars[k], 130, true, true);
+    for (const [c, b] of [['1', box(161, 144, 170, 200)], ['2', box(150, 234, 186, 290)], ['4', box(160, 330, 192, 400)]]) Ink.insert(seq, g(c, b), 130);
+    assert.equal(text(seq), '((1)/(2))/(4)');
+  }
+});
+
+test('a symbol written after a typeset numerator extends it; an = after the fraction does not', () => {
+  const seq = typeset([Ink.frac([Ink.glyph('1')], [Ink.glyph('5')])]), f = seq[0], n = f.num[0].box;
+  Ink.insert(seq, g('4', box(f.bar.x1 + 4, n.y0, f.bar.x1 + 4 + n.w, n.y1)), 80);
+  assert.equal(text(seq), '(14)/(5)');
+  typeset(seq);
+  const B = seq[0].bar, eq = box(B.x1 + 25, B.y - 12, B.x1 + 60, B.y + 10);
+  Ink.insert(seq, g('=', eq), 80);
+  assert.equal(text(seq), '(14)/(5)=');
+});
+
+test('a root over a fraction reaches down to its denominator; a bar under the whole root makes a fraction of it', () => {
+  const r = Ink.root([Ink.frac([Ink.glyph('1')], [Ink.glyph('4')])], 0), seq = typeset([r]);
+  assert.ok(r.tbot >= Ink.unionOf(r.body).y1, 'the sign stops above the denominator');
+  assert.ok(r.box.y1 >= Ink.unionOf(r.body).y1);
+  const line = typeset([Ink.root([Ink.glyph('9')], 0), Ink.glyph('+'), Ink.glyph('1')]), u = Ink.unionOf(line);
+  Ink.addFraction(line, box(u.x0 - 5, u.y1 + 15, u.x1 + 5, u.y1 + 17), 80, false, false);
+  assert.equal(text(line), '(√(9)+1)/()');
+  assert.equal(seq.length, 1);
+});
+
+test('the multiplication-shaped glyph: × between factors, x where no factor can stand', () => {
+  const T = cs => Ink.tokens(cs.map(c => typeof c === 'string' ? Ink.glyph(c) : c));
+  assert.deepEqual(T(['2', '*', Ink.root([Ink.glyph('4')], 1)]), ['2', '*', '√', '(', '4', ')']);
+  assert.deepEqual(T(['2', Ink.sup([Ink.glyph('2')]), '*', '3']), ['2', '^', '(', '2', ')', '*', '3']);
+  assert.deepEqual(T([Ink.frac([Ink.glyph('1')], [Ink.glyph('2')]), '*', '3']), ['(', '(', '1', ')', '/', '(', '2', ')', ')', '*', '3']);
+  assert.deepEqual(T(['2', '*', '=', '6']), ['2', 'x', '=', '6']);
+  const seq = typeset([Ink.glyph('2'), Ink.glyph('*')]);
+  assert.equal(Ink.face(seq[1]), 'x');
+  assert.equal(text(seq), '2x');
+  assert.equal(Ink.face(typeset([Ink.glyph('2'), Ink.glyph('*'), Ink.glyph('3')])[1]), '*');
+});
+
+test('letters: a written x is the unknown; runs of letters split into names, e and x', () => {
+  const T = s => Ink.tokens([...s].map(c => Ink.glyph(c)));
+  assert.deepEqual(T('2x+1'), ['2', 'x', '+', '1']);
+  assert.deepEqual(T('sinx'), ['sin', 'x']);
+  assert.deepEqual(T('xe'), ['x', 'e']);
+  assert.deepEqual(T('2ex'), ['2', 'e', 'x']);
+  assert.throws(() => T('xq'), /unknown word/);
 });

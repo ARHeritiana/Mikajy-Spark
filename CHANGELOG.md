@@ -5,6 +5,35 @@ and versions follow `MAJOR.MINOR` or `MAJOR.MINOR.PATCH` (the Android `versionNa
 
 ## [Unreleased]
 
+### Fixed
+- **Cursive x.** An x written as two arcs back to back (`)(`, the school cursive x) was read as a closing and an
+  opening bracket, so `2x=6` had no answer. The two arcs are now one symbol, the unknown x
+  (`Recognizer.cursiveX`, also when the second arc comes after a pause). A one-stroke x that loops was taken for a
+  root sign: a root sign never crosses itself. A `×` shape standing where only a variable can is shown as `x`, as it
+  is computed. Real brackets `)(` (taller than the digits, with a `(` to close) stay brackets.
+- **Fractions in fractions.** Written at once, the bars were placed in drawing order, so the inner bar drawn first
+  swallowed the outer one (`1(()/(2))/(4)`); two stacked bars with a digit between them could be taken for `=`; a bar
+  drawn alone before its numerator started a second line. Bars are now placed widest first, `=` needs nothing
+  between its bars, and a lone bar's line reaches as far up and down as the bar is wide. A bar wider than a typeset
+  fraction, under it, now makes `(1/2)/4` instead of going into its denominator.
+- **Nested layout.** A fraction inside a numerator or denominator overlapped the outer bar; parts are now moved clear
+  of the bar. A root over a fraction is drawn down to the foot of its denominator, and a tall line is kept on the screen.
+- **First batch placed at the wrong size.** A new line placed what was written with the default size (80 px) instead
+  of the size just measured from the handwriting, so parts of large fractions fell out of them.
+- **Long roots.** A root drawn first, alone, was typeset at a default size and its bar shrank, so the radicand written
+  afterwards fell out of it. The line now takes its size from the root sign and the bar keeps its drawn length. A
+  root written right after a `+` was fused with the `+`'s bar (`√(12√16)` instead of `√(12+√16)`).
+- **Parts added afterwards.** A root's bar can be lengthened later, taking what was written after the root inside; a
+  symbol written just after a typeset numerator or denominator continues it (`1/2` then `+3` → `(1+3)/2`); a bar under
+  a whole expression containing a root makes a fraction of the expression instead of going inside the root; the two
+  bars of an `=` written after a fraction are no longer split between its numerator and denominator.
+- Symbols stacked in one column (in nested fractions) were grouped into one symbol however far apart; a tall stroke
+  that merely started next to a digit was glued to it.
+- `2×√4`, `2²×3`, `(1/2)×3` read the `×` as the unknown x (the check for "next to an operator" matched any non-glyph
+  neighbour). Letters run together are read as names, e and x (`sinx` = `sin x`).
+- Limits raised so long lines keep working: 400 tokens (was 160) for the maths engine, 400 nodes (was 200) for a
+  history tree; history text is capped at 400 characters instead of making the whole entry unreadable.
+
 ## [5.5] - 2026-11-12
 
 Updates 5.4 in place from the app. `versionCode` 21.
