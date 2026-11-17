@@ -163,10 +163,10 @@ public class MainActivity extends Activity {
         };
         String result = UpdateChecker.download(apkUrl, sumsUrl, apk, shown);
         if ("offline".equals(result)) result = UpdateChecker.download(apkUrl, sumsUrl, apk, shown);   // a dropped connection: once more
-        if (!"ok".equals(result)) { failed(result); return; }
+        if (!"ok".equals(result)) { failed(result, UpdateChecker.lastDetail); return; }
         report("{\"state\":\"verifying\"}");
         String bad = SelfInstaller.checkArchive(MainActivity.this, apk);
-        if (bad != null) { apk.delete(); failed(bad); return; }
+        if (bad != null) { apk.delete(); failed(bad, "not a newer com.mikajy.app"); return; }
         runOnUiThread(new Runnable() { @Override public void run() { installNow(apk); }});
       }});
     }
@@ -197,11 +197,21 @@ public class MainActivity extends Activity {
   /** Android's confirmation (or installer screen) is showing: a new tap on the page may start over. */
   private volatile boolean confirming;
 
-  private void failed(String reason) {
+  private void failed(String reason) { failed(reason, lastDetail); }
+
+  /** Reports a failure with a short detail (Android's own message, an exception) that the page shows under the buttons. */
+  private void failed(String reason, String detail) {
     updating.set(false);
     confirming = false;
-    report("{\"state\":\"failed\",\"reason\":\"" + reason + "\"}");
+    lastDetail = "";
+    try {
+      report(new JSONObject().put("state", "failed").put("reason", reason).put("detail", UpdateChecker.clean(detail)).toString());
+    } catch (org.json.JSONException e) {
+      report("{\"state\":\"failed\",\"reason\":\"" + reason + "\"}");
+    }
   }
+  /** Android's message about the last install failure, kept for the report. */
+  private String lastDetail = "";
 
   /** UI thread. Asks once for "Install unknown apps" if Android needs it, then writes the install session off the UI thread. */
   private void installNow(final File apk) {
@@ -224,7 +234,8 @@ public class MainActivity extends Activity {
         SelfInstaller.install(MainActivity.this, apk);
       } catch (IOException | RuntimeException e) {
         Log.e(TAG, "Update install failed", e);
-        runOnUiThread(new Runnable() { @Override public void run() { sessionFailed("install"); }});
+        final String why = UpdateChecker.detail(e);
+        runOnUiThread(new Runnable() { @Override public void run() { lastDetail = why; sessionFailed("install"); }});
       }
     }});
   }
@@ -235,6 +246,7 @@ public class MainActivity extends Activity {
     if (("install".equals(why) || "blocked".equals(why)) && !triedScreen && apk != null && apk.isFile()) {
       triedScreen = true;
       if (SelfInstaller.openSystemInstaller(this)) { confirming = true; report("{\"state\":\"confirm\"}"); return; }
+      lastDetail = (lastDetail.isEmpty() ? "" : lastDetail + "; ") + "no installer screen";
     }
     failed(why);
   }
@@ -243,6 +255,8 @@ public class MainActivity extends Activity {
     super.onNewIntent(intent);
     if (intent == null || !SelfInstaller.ACTION_STATUS.equals(intent.getAction())) return;
     String state = SelfInstaller.onStatus(this, intent);
+    String message = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
+    if (message != null) lastDetail = message;
     if ("confirm".equals(state)) { confirming = true; report("{\"state\":\"confirm\"}"); }
     else if ("installed".equals(state)) { updating.set(false); confirming = false; report("{\"state\":\"installed\"}"); }
     else if ("aborted".equals(state) || "conflict".equals(state)) failed(state);
@@ -254,7 +268,7 @@ public class MainActivity extends Activity {
     super.onActivityResult(request, result, data);
     if (request != SelfInstaller.REQUEST_SYSTEM_INSTALL) return;
     if (result == RESULT_OK) { updating.set(false); confirming = false; report("{\"state\":\"installed\"}"); }
-    else failed(result == RESULT_CANCELED ? "aborted" : "install");
+    else failed(result == RESULT_CANCELED ? "aborted" : "install", "installer screen result " + result);
   }
 
   @Override protected void onCreate(Bundle state) {

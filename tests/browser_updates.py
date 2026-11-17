@@ -77,11 +77,11 @@ async def main():
         assert "42 %" in await page.inner_text("#toast")
         await page.evaluate("onUpdateProgress(JSON.stringify({state: 'permission'}))")
         assert "Allow Mikajy Spark to install updates" in await page.inner_text("#toast")
-        await page.evaluate("onUpdateProgress(JSON.stringify({state: 'failed', reason: 'checksum'}))")
+        await page.evaluate("onUpdateProgress(JSON.stringify({state: 'failed', reason: 'checksum', detail: 'SHA-256 differs'}))")
         assert "did not match its checksum" in await page.inner_text("#toast")
         text = await page.inner_text("#panel")
         assert "Download in the browser" in text and "Try again" in text, text
-        assert "Last attempt: the download did not match its checksum." in text, text   # the reason stays on screen
+        assert "Last attempt: the download did not match its checksum (SHA-256 differs)." in text, text   # the reason stays on screen
         await page.click("button[data-a=getweb]")
         assert (await page.evaluate("window.__calls"))[-1] == "open:" + full["apk"]
         await page.click("button[data-a=getupd]")   # a new in-app attempt

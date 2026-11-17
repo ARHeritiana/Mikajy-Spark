@@ -475,7 +475,7 @@ window.onUpdateProgress=json=>{let r;try{r=Updates.progress(JSON.parse(json))}ca
  else if(s=='confirm')toast(T('confirmInstall'));else if(s=='installed'){INST=null;toast(T('installed'))}
  else if(s=='failed')toast(T('installFailed',{why:T('why_'+r.reason)}));
  refreshUpd()};
-function updHint(){if(!hasUpdater())return'';const u=pendingUpdate(),why=INST&&INST.state=='failed'?' '+T('lastFailed',{why:T('why_'+INST.reason)}):'';
+function updHint(){if(!hasUpdater())return'';const u=pendingUpdate(),why=INST&&INST.state=='failed'?' '+T('lastFailed',{why:T('why_'+INST.reason)+(INST.detail?' ('+esc(INST.detail)+')':'')}):'';
  return T('updateHint',{v:esc(appVersion()),avail:u?T('availableSuffix',{n:esc(u.version)}):''})+why}
 function updBadge(){$('mb').classList.toggle('upd',!!pendingUpdate())}
 window.onUpdateResult=json=>{

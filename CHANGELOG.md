@@ -23,7 +23,10 @@ Updates 5.6 in place from the app. `versionCode` 23.
   fails for a reason that is not the package's own, the app opens Android's standard installer screen on the verified
   APK instead of giving up (served read-only by the app's content provider). Android's own outcome is now told apart:
   security settings that block apps from outside the store (for example Samsung's Auto Blocker), a package Android
-  refuses, a cancelled confirmation. The status message Android gives is logged.
+  refuses, a cancelled confirmation. Android's own message (or the network error) is shown with the reason, so a
+  failure can be diagnosed from one screenshot. Any `*.githubusercontent.com` download host is accepted, so a move of
+  GitHub's asset storage cannot break updates again (the checksum and Android's signature check still apply).
+- CI: the download of the test library `org.json` retries when Maven Central rate-limits the runner (HTTP 429).
 
 Phones on 5.5 or 5.6 still have the previous updater: if it fails there, *Download in the browser* installs 5.7 once
 (it updates in place, keeping history and settings); updates after 5.7 use the new updater.

@@ -70,7 +70,12 @@ const Updates = (() => {
     if (!STATES.includes(o.state)) return null;
     const out = {state: o.state};
     if (o.state === 'downloading') out.p = Number.isFinite(o.p) && o.p >= 0 && o.p <= 1 ? o.p : -1;
-    if (o.state === 'failed') out.reason = REASONS.includes(o.reason) ? o.reason : 'error';
+    if (o.state === 'failed') {
+      out.reason = REASONS.includes(o.reason) ? o.reason : 'error';
+      // Android's own words (an install status message, an exception): printable characters only, short.
+      const d = typeof o.detail === 'string' ? o.detail.replace(/[^A-Za-z0-9 _.,:()\/'?-]/g, '').trim().slice(0, 160) : '';
+      if (d) out.detail = d;
+    }
     return out;
   }
   /** Automatic checks run at most once a day, and never when the user switched them off. */

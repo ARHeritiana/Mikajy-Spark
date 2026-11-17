@@ -40,7 +40,10 @@ public final class UpdateCheckerTest {
     check(UpdateChecker.isDownloadUrl(R + "download/v5.1/Mikajy-Spark-5.1.apk"), "release download accepted");
     check(UpdateChecker.isDownloadUrl("https://objects.githubusercontent.com/github-production-release-asset/1?x=1"), "asset host accepted");
     check(UpdateChecker.isDownloadUrl("https://release-assets.githubusercontent.com/x"), "new asset host accepted");
+    check(UpdateChecker.isDownloadUrl("https://future-assets.githubusercontent.com/x"), "a future asset host of GitHub accepted");
+    check("IOException: HTTP 503 ?x?".equals(UpdateChecker.detail(new java.io.IOException("HTTP 503 <x>"))), "error detail sanitised");
     for (String bad : new String[] {"http://github.com/x", "https://evil.example/x.apk", "https://github.com.evil.example/x",
+        "https://githubusercontent.com/x", "https://evilgithubusercontent.com/x", "https://x.githubusercontent.com.evil.example/x",
         "https://user:pw@github.com/x", "https://github.com:8443/x", "ftp://github.com/x", "not a url", null}) {
       check(!UpdateChecker.isDownloadUrl(bad), "download refused: " + bad);
     }

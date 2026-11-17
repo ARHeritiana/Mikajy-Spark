@@ -38,8 +38,12 @@ final class UpdateChecker {
   private static final int MAX_BYTES = 512 * 1024;
   private static final Pattern TAG = Pattern.compile("^v[0-9]{1,4}(\\.[0-9]{1,4}){1,2}$");
   private static final Pattern SHA256 = Pattern.compile("^[0-9a-f]{64}$");
-  /** github.com serves the release link and redirects the download to its asset storage. */
+  /** github.com serves the release link and redirects the download to its asset storage, on a githubusercontent.com host
+   *  (objects., release-assets., …: GitHub has moved it before, so any subdomain is accepted, never another domain). */
   private static final String[] DOWNLOAD_HOSTS = {"github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"};
+  private static final String ASSET_DOMAIN = ".githubusercontent.com";
+  /** Why the last download failed, for the page (short, sanitised), or "". */
+  static volatile String lastDetail = "";
   static final long MAX_APK_BYTES = 64L * 1024 * 1024;
   private static final int MAX_SUMS_BYTES = 64 * 1024;
   private static final int MAX_REDIRECTS = 5;
@@ -131,7 +135,7 @@ final class UpdateChecker {
       if (!"https".equals(u.getProtocol()) || u.getUserInfo() != null || (u.getPort() != -1 && u.getPort() != 443)) return false;
       String host = u.getHost().toLowerCase(Locale.ROOT);
       for (String h : DOWNLOAD_HOSTS) if (h.equals(host)) return true;
-      return false;
+      return host.endsWith(ASSET_DOMAIN) && host.length() > ASSET_DOMAIN.length() && host.matches("[a-z0-9.-]+") && !host.contains("..");
     } catch (MalformedURLException e) {
       return false;
     }
@@ -200,6 +204,7 @@ final class UpdateChecker {
    * the release's SHA256SUMS.txt. Returns "ok", or why not: "offline", "checksum" (no or wrong checksum) or "error".
    */
   static String download(String apkUrl, String sumsUrl, File dest, Progress progress) {
+    lastDetail = "";
     if (!isReleaseUrl(apkUrl) || !isReleaseUrl(sumsUrl) || !apkUrl.endsWith(".apk")) return "error";
     HttpsURLConnection http = null;
     try {
@@ -207,7 +212,7 @@ final class UpdateChecker {
       String expected = expectedSha256(read(http.getInputStream(), MAX_SUMS_BYTES), fileName(apkUrl));
       http.disconnect();
       http = null;
-      if (expected == null) return "checksum";
+      if (expected == null) { lastDetail = "no checksum listed for " + fileName(apkUrl); return "checksum"; }
 
       http = open(apkUrl);
       long total = contentLength(http);
@@ -226,20 +231,34 @@ final class UpdateChecker {
         }
       }
       if (total >= 0 && done != total) throw new IOException("truncated");
-      if (!expected.equals(hex(sha.digest()))) { dest.delete(); return "checksum"; }
+      if (!expected.equals(hex(sha.digest()))) { dest.delete(); lastDetail = "SHA-256 differs"; return "checksum"; }
       return "ok";
     } catch (Refused e) {
       dest.delete();
+      lastDetail = detail(e);
       return "error";
     } catch (IOException e) {
       dest.delete();
+      lastDetail = detail(e);
       return "offline";
     } catch (NoSuchAlgorithmException | RuntimeException e) {
       dest.delete();
+      lastDetail = detail(e);
       return "error";
     } finally {
       if (http != null) http.disconnect();
     }
+  }
+
+  /** A short, printable account of an error for the page: class and message, letters, digits and simple punctuation only. */
+  static String detail(Throwable e) {
+    String m = e.getMessage();
+    return clean(e.getClass().getSimpleName() + (m == null ? "" : ": " + m));
+  }
+  static String clean(String s) {
+    if (s == null) return "";
+    String t = s.replaceAll("[^A-Za-z0-9 _.,:()/'-]", "?").trim();
+    return t.length() > 160 ? t.substring(0, 160) : t;
   }
 
   private static String failure(String reason) {
