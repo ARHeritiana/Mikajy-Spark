@@ -5,6 +5,21 @@ and versions follow `MAJOR.MINOR` or `MAJOR.MINOR.PATCH` (the Android `versionNa
 
 ## [Unreleased]
 
+## [5.8] - 2026-11-17
+
+Updates 5.7 in place from the app. `versionCode` 24.
+
+### Changed
+- Typeface: the interface and the typeset ink now use Shantell Sans Light (SIL OFL 1.1) instead of Caveat, for a
+  lighter, livelier look. Licence text in `licenses/OFL-ShantellSans.txt`.
+- The settings sheet's title, tabs and options are a little smaller on phones narrower than 400 px, so the wider
+  typeface keeps them on one line.
+
+### Fixed
+- A bar drawn under a typeset denominator to nest a fraction (`1/2` → `1/(2/3)`) could be taken for a bar around the
+  whole fraction when the denominator was nearly as wide as the bar (more likely with the wider typeface). A new bar
+  narrower than the fraction's bar now always goes inside; one at least as wide makes a fraction of the fraction.
+
 ## [5.7] - 2026-11-17
 
 Updates 5.6 in place from the app. `versionCode` 23.

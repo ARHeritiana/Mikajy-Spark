@@ -147,6 +147,13 @@ test('a bar wider than a typeset fraction, under it, makes a fraction of the fra
   const inner = typeset([Ink.frac([Ink.glyph('1')], [Ink.glyph('2')])]), d = inner[0].den[0].box;
   Ink.addFraction(inner, box(d.x0 - 4, d.y1 + 8, d.x1 + 4, d.y1 + 10), 80, false, false);
   assert.equal(text(inner), '(1)/((2)/())');
+  // Narrower than the fraction's bar (even by a little, with a wide digit): inside. As wide or wider: around it.
+  const near = typeset([Ink.frac([Ink.glyph('1')], [Ink.glyph('2')])]), B = near[0].bar, dy = Ink.unionOf(near[0].den).y1 + 10;
+  Ink.addFraction(near, box(B.x0 + 4, dy, B.x1 - 4, dy + 2), 80, false, false);
+  assert.equal(text(near), '(1)/((2)/())');
+  const wide = typeset([Ink.frac([Ink.glyph('1')], [Ink.glyph('2')])]), W = wide[0].bar;
+  Ink.addFraction(wide, box(W.x0 - 2, dy, W.x1 + 2, dy + 2), 80, false, false);
+  assert.equal(text(wide), '((1)/(2))/()');
   assert.ok(f.bar && Ink.contentAbove(typeset([Ink.frac([Ink.glyph('1')], [Ink.glyph('2')])]), box(0, 200, 10, 202), 80) === false);
 });
 
