@@ -5,6 +5,10 @@ and versions follow `MAJOR.MINOR` or `MAJOR.MINOR.PATCH` (the Android `versionNa
 
 ## [Unreleased]
 
+### Fixed
+- Approximate results no longer show an equal sign before the approximate sign: `π/3` reads `≈1.0471975512`
+  (not `=≈1.0471975512`) and an irrational root reads `x≈1.609…` (not `x=≈1.609…`).
+
 ## [5.8] - 2026-11-17
 
 Updates 5.7 in place from the app. `versionCode` 24.
