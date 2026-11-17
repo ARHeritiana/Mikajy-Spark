@@ -93,3 +93,26 @@ test('symbols stacked in one column stay apart; a tall stroke that only starts n
   next[0] = [166, 22];   // that starts right against the 2
   assert.equal(R.groupStrokes([two, next]).length, 2);
 });
+
+test('a flag drawn from the end of a stem joins it; a symbol written tight against a narrow digit or a tall bracket does not', () => {
+  // 5: stem and bowl drawn from the top, then the flag from where that stroke started
+  const body = [[10, 0], [8, 45], [40, 45], [44, 75], [30, 95], [6, 90]], flag = [[10, 0], [26, 0], [44, 1]];
+  assert.equal(R.groupStrokes([body, flag]).length, 1, 'the flag of a 5');
+  // 3 (narrow and tall), then an × whose first stroke starts against the 3's bowl, beside its middle
+  const three = [[0, 5], [30, 0], [40, 20], [20, 48], [42, 70], [36, 95], [2, 100]];
+  const down = [[46, 45], [70, 70], [94, 94]], up = [[94, 45], [70, 70], [48, 92]];
+  assert.deepEqual(R.groupStrokes([three, down, up]).map(g => g.s.length), [1, 2]);
+  // a tall ( and the 1 written inside it, starting next to its curve
+  const open = [...Array(17).keys()].map(t => [36 - 36 * Math.sin(Math.PI * t / 16), 112 + 177 * t / 16]);
+  const one = [[374, 216], [404, 168], [398, 248]].map(([x, y]) => [x - 330 + 8, y]);
+  assert.deepEqual(R.groupStrokes([open, one]).map(g => g.s.length), [1, 1]);
+});
+
+test('a − written just after and below a small exponent is not part of it; the bars of π, 7 and + still are', () => {
+  const exp2 = [[76, 250], [90, 243], [103, 252], [80, 286], [103, 286]], minus = [[92, 304], [107, 304], [122, 305]];
+  assert.equal(R.groupStrokes([exp2, minus]).length, 2);
+  const legs = [[[10, 10], [10, 60]], [[40, 10], [42, 60]]], top = [[0, 9], [25, 8], [52, 9]];
+  assert.equal(R.groupStrokes([top, ...legs]).length, 1, 'π');
+  const seven = [[0, 0], [40, 0], [15, 80]], cross = [[10, 40], [25, 40], [40, 40]];
+  assert.equal(R.groupStrokes([seven, cross]).length, 1, 'crossed 7');
+});

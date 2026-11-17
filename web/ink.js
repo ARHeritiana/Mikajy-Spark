@@ -144,6 +144,14 @@ const Ink = (() => {
     return (foot > .3 || (centre > .3 && foot > .12)) && b.h < .85 * NH;
   }
 
+  /** Does an operator `c` (ink box `b`) continue the exponent `body`? A − written at the middle of the base is always above
+   *  the base's foot, so that says nothing: it must be level with the exponent itself (2^(n−1), not 2² − 4). */
+  function levelWith(body, b, c) {
+    if (!'+-*/'.includes(c) || !c) return true;
+    const u = unionOf(body);
+    return !u || (b.y0 + b.y1) / 2 < u.y1 - .1 * u.h;
+  }
+
   /**
    * Where a new symbol (ink box `b`, reading `c`) belongs: {seq, k, sup}. `s` is the font size of `seq`.
    * Inside a fraction (above / below its bar) or under a root's bar it goes into that part; otherwise it is
@@ -180,7 +188,7 @@ const Ink = (() => {
     let k = 0;
     while (k < seq.length && midX(seq[k]) < cx) k++;
     const prev = seq[k - 1], next = seq[k];
-    if (prev && prev.t === 'sup' && seq[k - 2] && raised(seq[k - 2], b, c, true)) {
+    if (prev && prev.t === 'sup' && seq[k - 2] && raised(seq[k - 2], b, c, true) && levelWith(prev.body, b, c)) {
       let j = 0;
       while (j < prev.body.length && midX(prev.body[j]) < cx) j++;
       return {seq: prev.body, k: j};
@@ -213,10 +221,30 @@ const Ink = (() => {
   }
   /** Is typeset content standing just above the flat stroke `b` (a bar drawn under a finished expression)? */
   const contentAbove = (seq, b, s) => slot(seq, b, '-', s).seq.some(aboveBar(b, s));
+  /** The typeset run standing above the flat stroke `b`: what `aboveBar` picks, with the minus signs between those nodes
+   *  (−3 − √64) and a leading sign that starts left of the bar but reaches over it. Removed from `seq`; {k: -1} if none. */
+  function numeratorRun(seq, b, s) {
+    // a typeset − floats at mid-height, about .3 of the font size above the digits' feet
+    const above = aboveBar(b, s), y = (b.y0 + b.y1) / 2, H = 1.3 * Math.max(s * .55, 30) + .35 * s;
+    const sign = n => { const q = bx(n); return n.t === 'g' && ch(n) === '-' && !!q && q.x1 > b.x0 && q.x0 < b.x1 && q.y1 <= y + 10 && y - q.y1 < H; };
+    const idx = seq.map((n, k) => above(n) ? k : -1).filter(k => k >= 0);
+    if (!idx.length) return {k: -1, run: []};
+    let lo = idx[0];
+    const hi = idx[idx.length - 1];
+    // A leading sign (unary: first, or after an operator or "(") may end just before the bar once typeset: −3−√64 over a
+    // bar is (−3−√64)/3, not −(3−√64)/3.
+    const lead = k => { const n = seq[k], q = n && bx(n), p = seq[k - 1];
+      return !!q && n.t === 'g' && ch(n) === '-' && q.x1 > b.x0 - .5 * s && q.x0 < b.x1 && q.y1 <= y + 10 && y - q.y1 < H &&
+        (!p || (p.t === 'g' && '+-*/=('.includes(ch(p)))); };
+    for (let k = lo; k <= hi; k++) if (!above(seq[k]) && !sign(seq[k])) return {k: -1, run: []};
+    while (lo > 0 && sign(seq[lo - 1])) lo--;
+    if (lo > 0 && lead(lo - 1)) lo--;
+    return {k: lo, run: seq.splice(lo, hi - lo + 1)};
+  }
   function addFraction(seq, b, s, inkAbove, inkBelow) {
     const at = slot(seq, b, '-', s), y = (b.y0 + b.y1) / 2, above = aboveBar(b, s);
     if (!inkAbove && !inkBelow && !at.seq.some(above)) return null;
-    const {k, run} = takeRun(at.seq, above), f = frac(run, []);
+    const {k, run} = numeratorRun(at.seq, b, s), f = frac(run, []);
     Object.assign(f, {raw: box(b.x0, y - 4, b.x1, y + 4), bar: {x0: b.x0, x1: b.x1, y}, ts: s});
     at.seq.splice(k >= 0 ? k : at.k, 0, f);
     return f;
@@ -288,19 +316,21 @@ const Ink = (() => {
   }
 
   /* ---- Reading: candidates in context --------------------------------------------------------- */
-  /** Down-weights readings that make no sense where they stand (an operator after an operator, ...). */
-  function contextFix(seq, last) {
+  /** Down-weights readings that make no sense where they stand (an operator after an operator, ...). `last`: `seq` is the
+   *  line; `part`: it is a numerator, denominator, exponent or radicand, which cannot end in an operator or hold an = (the
+   *  crossed 7 of 27/100 is no +). */
+  function contextFix(seq, last, part) {
     let pc = '', open = 0;
     seq.forEach((n, k) => {
       if (n.t !== 'g') { pc = 'n'; return; }
       if (n.fresh) {
-        const end = last && k === seq.length - 1;
+        const end = (last || part) && k === seq.length - 1;
         n.c.forEach(o => {
           let f = 1;
           const c = o.c;
           if ('*/)'.includes(c) && (k === 0 || '+-*/('.includes(pc))) f *= .25;
           if (c === ')' && open <= 0) f *= .3;
-          if (c === '=' && !end) f *= .3;
+          if (c === '=' && (!end || part)) f *= .3;
           if (end && '+-*/'.includes(c)) f *= .5;
           o.p *= f;
         });
@@ -320,9 +350,9 @@ const Ink = (() => {
     R.wordfix(view);
     seq.forEach(n => { if (n.t === 'g') { delete n.b; delete n.sup; } });
   }
-  function readAll(seq, top) {
-    contextFix(seq, top); readWords(seq);
-    for (const n of seq) for (const c of children(n)) readAll(c, false);
+  function readAll(seq, top, part) {
+    contextFix(seq, top, part); readWords(seq);
+    for (const n of seq) for (const c of children(n)) readAll(c, false, true);
   }
 
   /* ---- Tokens for the maths engine ------------------------------------------------------------ */

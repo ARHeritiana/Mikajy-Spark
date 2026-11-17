@@ -46,6 +46,8 @@ const Recognizer = (() => {
     const n = A.length, used = new Array(n).fill(false);
     for (let i = 0; i < n; i++) {
       let best = null;
+      // A 0 after digits continues the number (320 × ..., not 32·exp): it does not start a word as an o, c or e.
+      if (i > 0 && A[i - 1].b && /[0-9]/.test(ch(A[i - 1])) && A[i].c[0].c === '0' && A[i].c[0].p >= .3) continue;
       for (const w of WORDS) {
         if (i + w.length > n) continue;
         let score = 1, fuzzy = 0, ok = true;
@@ -215,19 +217,29 @@ const Recognizer = (() => {
    * between two strokes is symmetric and every pair is compared, so the result does not depend on the order
    * the strokes were drawn in: the second bar of = may come after the 3 that follows it, the dot of an i
    * before its stem, the dots of ÷ before their bar. */
-  /** Does stroke `s` (box `b`) belong with the stroke whose box is `q`? `vin` marks a root sign. */
-  function partOf(s, b, q, qVin, ref) {
+  /** Does stroke `s` (box `b`) belong with the stroke `qs` whose box is `q`? `vin` marks a root sign. */
+  function partOf(s, b, q, qVin, ref, qs) {
     const tiny = b.w < .2 * ref && b.h < .2 * ref, qTiny = q.w < .2 * ref && q.h < .2 * ref;
-    const m = qVin ? 0 : .18 * Math.max(q.h, q.w, 30), cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
     const bar = q.w > 2.5 * Math.max(q.h, 1), stem = q.h > 1.3 * q.w && q.h > 25;
+    // The side margin scales with the other stroke, except for a tall thin one (a bracket, a 1) next to something much
+    // shorter: there its height says nothing about how far its symbol reaches sideways ("(1" are two symbols).
+    const m = qVin ? 0 : .18 * (stem && !tiny && q.h > 1.5 * b.h ? Math.max(q.w, b.w, 30) : Math.max(q.h, q.w, 30));
+    const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
     const dotA = tiny && stem && cy < q.y0 && q.y0 - cy < .7 * q.h, dotB = tiny && stem && cy > q.y1 + .1 * q.h && cy - q.y1 < .6 * q.h;
-    // A flag or bar drawn from a stem (the top of a 5) belongs to it; a full-height stroke that merely starts next to
-    // a stem is the next symbol (a cursive x after a 2).
-    const p0 = s[0], touch = stem && !tiny && b.w > .2 * q.h && (b.h < .6 * q.h || cx <= q.x1 + .1 * q.h) &&
-      p0[0] >= q.x0 - .1 * q.h && p0[0] <= q.x1 + .1 * q.h && p0[1] >= q.y0 - .1 * q.h && p0[1] <= q.y1 + .1 * q.h;
+    // A flag or bar drawn from a stem (the top of a 5) belongs to it: it starts where the stem's stroke ends. A stroke
+    // that merely starts next to the stem is the next symbol (a cursive x after a 2, an × written tight against a 3,
+    // the 1 after a tall "(").
+    const p0 = s[0], r = .12 * q.h + 4;
+    const touch = stem && !tiny && b.w > .2 * q.h && (b.h < .6 * q.h || cx <= q.x1 + .1 * q.h) &&
+      p0[0] >= q.x0 - r && p0[0] <= q.x1 + r && p0[1] >= q.y0 - r && p0[1] <= q.y1 + r &&
+      (!qs || [qs[0], qs[qs.length - 1]].some(p => Math.abs(p[0] - p0[0]) < r && Math.abs(p[1] - p0[1]) < r));
     // Same column is not enough: two symbols stacked one above the other (in nested fractions) stay apart. The
     // bars of = may be far apart for their (zero) height, but not for their width.
-    const gap = Math.max(0, b.y0 - q.y1, q.y0 - b.y1), close = gap < Math.max(.5 * Math.max(b.h, q.h), .8 * Math.max(b.w, q.w));
+    const gap = Math.max(0, b.y0 - q.y1, q.y0 - b.y1);
+    // A dash clearly under or over a symbol is a symbol of its own (the − written just after and below the exponent of
+    // 2² − 4); a flat stroke that is part of a symbol touches or crosses it (π, 5, 7, +). Two flat strokes are an =.
+    const flatB = b.w > 2.5 * Math.max(b.h, 1), apart = flatB !== bar && gap > .12 * Math.max(b.w, b.h, q.w, q.h);
+    const close = !apart && gap < Math.max(.5 * Math.max(b.h, q.h), .8 * Math.max(b.w, q.w));
     return touch || (cx >= q.x0 - m && cx <= q.x1 + m && (tiny ? bar || qTiny || dotA || dotB : close));
   }
   /** Groups strokes into symbols: [{s: strokes in drawing order, b: box, tiny, x}], in the order of each symbol's first
@@ -237,7 +249,7 @@ const Recognizer = (() => {
     const up = S.map((_, i) => i), root = i => { while (up[i] !== i) i = up[i] = up[up[i]]; return i; };
     for (let i = 0; i < S.length; i++)
       for (let j = 0; j < i; j++)
-        if (partOf(S[i], bs[i], bs[j], !!S[j].vin, ref) || partOf(S[j], bs[j], bs[i], !!S[i].vin, ref) || cursiveX(S[i], S[j]))
+        if (partOf(S[i], bs[i], bs[j], !!S[j].vin, ref, S[j]) || partOf(S[j], bs[j], bs[i], !!S[i].vin, ref, S[i]) || cursiveX(S[i], S[j]))
           up[root(i)] = root(j);
     const G = new Map();
     S.forEach((s, i) => { const k = root(i); if (!G.has(k)) G.set(k, []); G.get(k).push(i); });
