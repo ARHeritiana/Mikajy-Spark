@@ -28,6 +28,7 @@ const Calculator = (() => {
     const prefix = exactDisplay ? '' : '≈';
     return [textPiece(prefix + niceNumber(value))];
   }
+  const isApprox = pieces => pieces[0].s !== undefined && pieces[0].s.startsWith('≈');
   function asResponse(pieces, value) {
     return {pieces, text: textOf(pieces), val: value};
   }
@@ -44,17 +45,21 @@ const Calculator = (() => {
         const result = Core.solve(left, right, settings);
         if (result.kind === 'identity') return asResponse([textPiece('x∈ℝ')], undefined);
         if (result.kind === 'none') return asResponse([textPiece('S=∅')], undefined);
-        const pieces = [textPiece('x=')];
+        const pieces = [];
         result.roots.forEach((r, i) => {
           if (i) pieces.push(textPiece(', '));
-          pieces.push(...numberPieces(r, settings.fmt || 'dec'));
+          const np = numberPieces(r, settings.fmt || 'dec');
+          // "x≈1.6", never "x=≈1.6": the approximate sign replaces the equal sign.
+          if (!i) pieces.push(textPiece(isApprox(np) ? 'x' : 'x='));
+          pieces.push(...np);
         });
         return asResponse(pieces, result.roots[0]?.value);
       }
       if (tokens.includes('x') && !tokens.some(t => ['Σ', '∫', 'lim', '∞', '→'].includes(t))) return null;
       if (tokens.length === 1 && !trailingEquals) return null;
       const result = Core.evaluate(tokens, settings);
-      return asResponse([...(!trailingEquals ? [textPiece('=')] : []), ...numberPieces(result, settings.fmt || 'dec')], result.value);
+      const np = numberPieces(result, settings.fmt || 'dec');
+      return asResponse([...(!trailingEquals && !isApprox(np) ? [textPiece('=')] : []), ...np], result.value);
     } catch (error) {
       if (!(error instanceof Core.MathError)) throw error;
       if (error.code === 'syntax' || !explicit) return null;

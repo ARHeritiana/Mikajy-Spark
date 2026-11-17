@@ -29,6 +29,8 @@ Found by replaying real finger-written expressions (traced from screenshots, now
   minus signs out of the numerator (`()/3`). A dash is no longer read as a decimal point next to a large symbol.
 - **A crossed 7 at the end of a numerator was read as `+`** (`(2+)/100`). A numerator, denominator, exponent or radicand
   cannot end in an operator, as the line already could not.
+- Approximate results no longer show an equal sign before the approximate sign: `π/3` reads `≈1.0471975512`
+  (not `=≈1.0471975512`) and an irrational root reads `x≈1.609…` (not `x=≈1.609…`).
 
 ## [5.8] - 2026-11-17
 

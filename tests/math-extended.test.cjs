@@ -92,8 +92,8 @@ test('inversion reports empty solution sets and refuses non-injective forms', ()
 test('calculator displays inverted equations honestly', () => {
   const calc = (t, set = {}) => Calculator.compute(T(t), {mode: 'instant', angle: 'rad', fmt: 'dec', ...set}, true);
   assert.equal(calc('2 ^ ( x ) = 8').text, 'x=3');
-  assert.equal(calc('e ^ ( x ) = 5').text.startsWith('x=≈1.609437'), true);
-  assert.equal(calc('ln ( x ) = 1').text.startsWith('x=≈2.71828'), true);
+  assert.equal(calc('e ^ ( x ) = 5').text.startsWith('x≈1.609437'), true);
+  assert.equal(calc('ln ( x ) = 1').text.startsWith('x≈2.71828'), true);
   assert.equal(calc('sin ( x ) = 0').text, '= unsupported');
   assert.equal(calc('4 ^ ( 1 / 2 )').text, '2');
 });
