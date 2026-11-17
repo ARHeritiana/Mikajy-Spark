@@ -8,3 +8,4 @@ bfea19c61d6259a7863784e62f8f96eb2a15de52a2882125f5a0ca55df9908c8  Mikajy-5.3.apk
 d0b38d8c70acea04986debdd985114bec2e1d22954c52bfd0a8d9c6af8e4bbed  Mikajy-Spark-5.5.apk
 eac769a660b3480a8c95f7c26e17ff6fe18e450f4ca2a3f8625f88b9f849baa0  Mikajy-Spark-5.6.apk
 b1e6ed744ca2bd00a3704f0e0a0cd4cac16b178a8b1047003bf177fb1882ebd1  Mikajy-Spark-5.7.apk
+6e872c25a4f8dba95de17b32a92a349648611963b9dae8404cdca46ef4b87df6  Mikajy-Spark-5.8.apk
