@@ -64,7 +64,7 @@ const Updates = (() => {
   const installable = u => !!(u && u.apk && u.sums && u.apk.endsWith('.apk'));
   /** Install progress from the shell ({state, p, reason}), validated: unknown states and reasons are dropped. */
   const STATES = ['downloading', 'verifying', 'permission', 'installing', 'confirm', 'installed', 'failed'];
-  const REASONS = ['offline', 'checksum', 'package', 'permission', 'aborted', 'install', 'error'];
+  const REASONS = ['offline', 'checksum', 'package', 'permission', 'aborted', 'install', 'blocked', 'conflict', 'error'];
   function progress(raw) {
     const o = raw && typeof raw === 'object' ? raw : {};
     if (!STATES.includes(o.state)) return null;

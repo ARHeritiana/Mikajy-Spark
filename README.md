@@ -19,8 +19,10 @@ tells you.
 3. **Get Mikajy Spark x.y** updates in the app: it downloads the release APK, checks it against the release's
    `SHA256SUMS.txt` and that it is a newer Mikajy Spark, and hands it to Android's installer. The first time, Android
    asks you to allow Mikajy Spark to install apps (*Install unknown apps*); after that, Android shows its own
-   "update this app?" confirmation (on Android 12 and later it may skip it). If anything fails, the button becomes
-   **Download in the browser**. Versions up to 5.0.1 still have the browser-only updater, so the update *to* the
+   "update this app?" confirmation (on Android 12 and later it may skip it). If Android's install session fails, the
+   app opens Android's standard installer screen instead. If anything still fails, the reason stays under the buttons
+   and you can **Try again** or **Download in the browser**. A phone whose security settings block apps from outside
+   the store (e.g. Samsung's *Auto Blocker*) must allow it first, whichever way you install. Versions up to 5.0.1 still have the browser-only updater, so the update *to* the
    first version with the in-app updater goes through the browser once.
 
 Updates install over the old version only if both are signed with the same key (every release from 5.0 on is).

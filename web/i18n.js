@@ -19,7 +19,9 @@ const I18n = (() => {
     confirmInstall: 'Confirm the update to finish', installed: 'Updated', getInBrowser: 'Download in the browser',
     installFailed: 'Update not installed: {why}', why_offline: 'no connection', why_checksum: 'the download did not match its checksum',
     why_package: 'it is not a newer Mikajy Spark', why_permission: 'installing updates was not allowed', why_aborted: 'cancelled',
-    why_install: 'Android refused it', why_error: 'something went wrong', writeHint: 'write a sum', canvasAria: 'Handwriting canvas: write a calculation with your finger', menuAria: 'Menu',
+    why_install: 'Android refused it', why_error: 'something went wrong',
+    why_blocked: "the phone's security settings block apps from outside the store", why_conflict: 'Android refused the package',
+    tryAgain: 'Try again', lastFailed: 'Last attempt: {why}.', writeHint: 'write a sum', canvasAria: 'Handwriting canvas: write a calculation with your finger', menuAria: 'Menu',
     unsupported: 'unsupported', undefined: 'undefined'
   };
   const FR = {
@@ -40,7 +42,9 @@ const I18n = (() => {
     confirmInstall: 'Confirmez la mise à jour pour terminer', installed: 'Mis à jour', getInBrowser: 'Télécharger dans le navigateur',
     installFailed: 'Mise à jour non installée : {why}', why_offline: 'pas de connexion', why_checksum: 'le téléchargement ne correspond pas à sa somme de contrôle',
     why_package: "ce n'est pas une version plus récente de Mikajy Spark", why_permission: "l'installation des mises à jour n'a pas été autorisée", why_aborted: 'annulée',
-    why_install: "Android l'a refusée", why_error: 'une erreur est survenue', writeHint: 'écrivez un calcul', canvasAria: "Zone d'écriture : écrivez un calcul avec le doigt", menuAria: 'Menu',
+    why_install: "Android l'a refusée", why_error: 'une erreur est survenue',
+    why_blocked: 'les réglages de sécurité du téléphone bloquent les applications hors boutique', why_conflict: 'Android a refusé le paquet',
+    tryAgain: 'Réessayer', lastFailed: 'Dernier essai : {why}.', writeHint: 'écrivez un calcul', canvasAria: "Zone d'écriture : écrivez un calcul avec le doigt", menuAria: 'Menu',
     unsupported: 'non géré', undefined: 'indéfini'
   };
   const TABLES = Object.freeze({en: EN, fr: FR});

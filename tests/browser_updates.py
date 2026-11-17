@@ -79,12 +79,39 @@ async def main():
         assert "Allow Mikajy Spark to install updates" in await page.inner_text("#toast")
         await page.evaluate("onUpdateProgress(JSON.stringify({state: 'failed', reason: 'checksum'}))")
         assert "did not match its checksum" in await page.inner_text("#toast")
-        assert "Download in the browser" in await page.inner_text("#panel")
-        await page.click("button[data-a=getupd]")
+        text = await page.inner_text("#panel")
+        assert "Download in the browser" in text and "Try again" in text, text
+        assert "Last attempt: the download did not match its checksum." in text, text   # the reason stays on screen
+        await page.click("button[data-a=getweb]")
         assert (await page.evaluate("window.__calls"))[-1] == "open:" + full["apk"]
+        await page.click("button[data-a=getupd]")   # a new in-app attempt
+        assert (await page.evaluate("window.__calls"))[-1] == "install:" + full["apk"] + "|" + full["sums"]
+        assert "Try again" not in await page.inner_text("#panel")
+        await page.evaluate("onUpdateProgress(JSON.stringify({state: 'confirm'}))")
+        await page.click("button[data-a=getupd]")   # Android's confirmation was dismissed: tapping starts over
+        assert (await page.evaluate("window.__calls")).count("install:" + full["apk"] + "|" + full["sums"]) == 3
         await page.evaluate("onUpdateProgress('{\"state\":\"<b>x</b>\"}'); onUpdateProgress('not json')")   # ignored
         assert not errors, errors
         await page.close()
+
+        # The sheet never scrolls sideways, whatever the update state, the language or the phone width.
+        for width, lang in ((411, "en"), (360, "fr"), (320, "fr")):
+            page, errors = await scenario(browser, full, settings={"lang": lang})
+            await page.set_viewport_size({"width": width, "height": 800})
+            await page.evaluate("() => { Android.installUpdate = () => {}; }")
+            await page.click("#mb")
+            await page.click("button[data-tab=app]")
+            await page.click("button[data-a=upd]")
+            await page.wait_for_timeout(300)
+            for state in ("{state: 'downloading', p: .5}", "{state: 'failed', reason: 'blocked'}", None):
+                if state:
+                    await page.evaluate(f"onUpdateProgress(JSON.stringify({state}))")
+                for tab in ("app", "actions", "math"):
+                    await page.click(f"button[data-tab={tab}]")
+                    m = await page.evaluate("() => { const p = document.getElementById('panel'), r = p.getBoundingClientRect(); return [p.scrollWidth, p.clientWidth, r.left, r.right, innerWidth]; }")
+                    assert m[0] <= m[1] and m[2] >= 0 and m[3] <= m[4], f"{width}px {lang} {state} {tab}: panel overflows {m}"
+            assert not errors, errors
+            await page.close()
 
         # An older shell without installUpdate keeps the browser link.
         page, errors = await scenario(browser, full)

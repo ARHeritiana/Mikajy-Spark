@@ -12,10 +12,16 @@ import android.provider.OpenableColumns;
 import java.io.File;
 import java.io.FileNotFoundException;
 
-/** Serves exactly one read-only file (the canvas PNG) to the share sheet. Not exported. */
+/**
+ * Serves exactly two read-only files, never anything else: the canvas PNG to the share sheet, and the downloaded,
+ * checksum-verified update APK to Android's own installer screen (the fallback when an install session fails).
+ * Not exported; access is granted per intent.
+ */
 public class ShareProvider extends ContentProvider {
   static final String AUTHORITY = "com.mikajy.app.share";
   static final String FILE_NAME = "mikajy.png";
+  static final String APK_NAME = "update.apk";
+  static final String APK_TYPE = "application/vnd.android.package-archive";
   private static final String DIR_NAME = "share";
 
   static File shareDir(Context context) { return new File(context.getCacheDir(), DIR_NAME); }
@@ -27,32 +33,38 @@ public class ShareProvider extends ContentProvider {
       f.delete();
   }
 
-  private File target() {
+  /** The file a content URI names, or null: only "/mikajy.png" and "/update.apk" exist. */
+  private File target(Uri uri) {
     Context context = getContext();
-    if (context == null) return null;
-    return new File(shareDir(context), FILE_NAME);
+    if (context == null || uri == null) return null;
+    String path = uri.getPath();
+    if (("/" + FILE_NAME).equals(path)) return new File(shareDir(context), FILE_NAME);
+    if (("/" + APK_NAME).equals(path)) return new File(SelfInstaller.dir(context), APK_NAME);
+    return null;
   }
 
   @Override public boolean onCreate() { return true; }
 
   @Override public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
-    File f = target();
-    if (f == null || !("/" + FILE_NAME).equals(uri.getPath()) || !"r".equals(mode) || !f.isFile()) {
+    File f = target(uri);
+    if (f == null || !"r".equals(mode) || !f.isFile()) {
       throw new FileNotFoundException("Invalid shared file");
     }
     return ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY);
   }
 
-  @Override public String getType(Uri uri) { return "image/png"; }
+  @Override public String getType(Uri uri) {
+    return uri != null && ("/" + APK_NAME).equals(uri.getPath()) ? APK_TYPE : "image/png";
+  }
 
   @Override public Cursor query(Uri uri, String[] projection, String selection, String[] args, String order) {
-    File f = target();
-    if (f == null || !f.isFile() || !("/" + FILE_NAME).equals(uri.getPath())) return null;
+    File f = target(uri);
+    if (f == null || !f.isFile()) return null;
     String[] columns = projection != null ? projection
         : new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE};
     Object[] row = new Object[columns.length];
     for (int i = 0; i < columns.length; i++) {
-      if (OpenableColumns.DISPLAY_NAME.equals(columns[i])) row[i] = FILE_NAME;
+      if (OpenableColumns.DISPLAY_NAME.equals(columns[i])) row[i] = f.getName();
       else if (OpenableColumns.SIZE.equals(columns[i])) row[i] = f.length();
     }
     MatrixCursor cursor = new MatrixCursor(columns, 1);

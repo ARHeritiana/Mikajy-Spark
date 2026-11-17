@@ -102,19 +102,53 @@ final class SelfInstaller {
 
   /**
    * Handles an ACTION_STATUS intent: shows Android's confirmation when it is needed. Returns the state for the page:
-   * "confirm", "installed", "aborted" or "install" (Android refused it: e.g. a different signing key).
+   * "confirm", "installed", "aborted", "blocked" (the device's security settings forbid installing apps from outside
+   * a store), "conflict" (Android refused the package itself: another signing key, an incompatible build) or
+   * "install" (any other failure of the install session: the caller may still try Android's installer screen).
    */
   @SuppressWarnings("deprecation")
   static String onStatus(Activity a, Intent i) {
     int status = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
+    if (status != PackageInstaller.STATUS_SUCCESS) {
+      android.util.Log.w("Mikajy", "Install status " + status + ": " + i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE));
+    }
     if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
       Intent confirm = i.getParcelableExtra(Intent.EXTRA_INTENT);
       if (confirm == null) return "install";
-      a.startActivity(confirm);
+      try {
+        a.startActivity(confirm);
+      } catch (RuntimeException e) {
+        return "install";
+      }
       return "confirm";
     }
     if (status == PackageInstaller.STATUS_SUCCESS) return "installed";
     if (status == PackageInstaller.STATUS_FAILURE_ABORTED) return "aborted";
+    if (status == PackageInstaller.STATUS_FAILURE_BLOCKED) return "blocked";
+    if (status == PackageInstaller.STATUS_FAILURE_CONFLICT || status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE
+        || status == PackageInstaller.STATUS_FAILURE_INVALID) return "conflict";
     return "install";
+  }
+
+  /** Request code of Android's installer screen (the fallback); its answer arrives in onActivityResult. */
+  static final int REQUEST_SYSTEM_INSTALL = 7;
+
+  /**
+   * Fallback when an install session fails for no reason of the package's own: opens Android's standard installer
+   * screen on the verified APK (served read-only by ShareProvider). Returns false when no installer screen exists.
+   */
+  @SuppressWarnings("deprecation")
+  static boolean openSystemInstaller(Activity a) {
+    Uri uri = Uri.parse("content://" + ShareProvider.AUTHORITY + "/" + ShareProvider.APK_NAME);
+    Intent i = new Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(uri, ShareProvider.APK_TYPE)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        .putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+        .putExtra(Intent.EXTRA_RETURN_RESULT, true);
+    try {
+      a.startActivityForResult(i, REQUEST_SYSTEM_INSTALL);
+      return true;
+    } catch (RuntimeException e) {   // ActivityNotFoundException, SecurityException
+      return false;
+    }
   }
 }

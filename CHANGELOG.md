@@ -5,6 +5,29 @@ and versions follow `MAJOR.MINOR` or `MAJOR.MINOR.PATCH` (the Android `versionNa
 
 ## [Unreleased]
 
+## [5.7] - 2026-11-17
+
+Updates 5.6 in place from the app. `versionCode` 23.
+
+### Fixed
+- **The settings sheet scrolled sideways when an update was available.** The update button's label ("Get Mikajy Spark 5.6",
+  "Download in the browser", longer in French) kept its one line and made the sheet wider than the screen (457 px of
+  content on a 411 px phone), cutting off the title, the tabs and the hint. Tool labels now wrap and the update actions
+  each take a row of their own. `tests/browser_updates.py` checks that the sheet never overflows, at 411, 360 and 320 px,
+  in English and French, in every update state.
+- **A failed in-app update left only the browser link, without saying why.** The reason was shown in a toast for a
+  second and a half; afterwards the button turned into *Download in the browser* for good. The reason now stays in the
+  hint (*Last attempt: …*), and both **Try again** (in the app) and **Download in the browser** are offered. A dismissed
+  Android confirmation can be started over with a tap.
+- **In-app updates are more robust.** A download cut off by the network is retried once. When Android's install session
+  fails for a reason that is not the package's own, the app opens Android's standard installer screen on the verified
+  APK instead of giving up (served read-only by the app's content provider). Android's own outcome is now told apart:
+  security settings that block apps from outside the store (for example Samsung's Auto Blocker), a package Android
+  refuses, a cancelled confirmation. The status message Android gives is logged.
+
+Phones on 5.5 or 5.6 still have the previous updater: if it fails there, *Download in the browser* installs 5.7 once
+(it updates in place, keeping history and settings); updates after 5.7 use the new updater.
+
 ## [5.6] - 2026-11-17
 
 Updates 5.5 in place from the app. `versionCode` 22.

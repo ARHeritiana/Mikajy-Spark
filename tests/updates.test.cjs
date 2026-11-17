@@ -61,6 +61,7 @@ test('in-app install: only with an APK and its checksum; progress from the shell
   assert.deepEqual(Updates.progress({state: 'downloading', p: 7}), {state: 'downloading', p: -1});
   assert.deepEqual(Updates.progress({state: 'failed', reason: 'checksum'}), {state: 'failed', reason: 'checksum'});
   assert.deepEqual(Updates.progress({state: 'failed', reason: '<img>'}), {state: 'failed', reason: 'error'});
+  assert.deepEqual(Updates.progress({state: 'failed', reason: 'blocked'}), {state: 'failed', reason: 'blocked'});
   assert.deepEqual(Updates.progress({state: 'confirm', extra: 1}), {state: 'confirm'});
   assert.equal(Updates.progress({state: 'eval'}), null);
   assert.equal(Updates.progress(null), null);
