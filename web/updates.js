@@ -64,13 +64,18 @@ const Updates = (() => {
   const installable = u => !!(u && u.apk && u.sums && u.apk.endsWith('.apk'));
   /** Install progress from the shell ({state, p, reason}), validated: unknown states and reasons are dropped. */
   const STATES = ['downloading', 'verifying', 'permission', 'installing', 'confirm', 'installed', 'failed'];
-  const REASONS = ['offline', 'checksum', 'package', 'permission', 'aborted', 'install', 'error'];
+  const REASONS = ['offline', 'checksum', 'package', 'permission', 'aborted', 'install', 'blocked', 'conflict', 'error'];
   function progress(raw) {
     const o = raw && typeof raw === 'object' ? raw : {};
     if (!STATES.includes(o.state)) return null;
     const out = {state: o.state};
     if (o.state === 'downloading') out.p = Number.isFinite(o.p) && o.p >= 0 && o.p <= 1 ? o.p : -1;
-    if (o.state === 'failed') out.reason = REASONS.includes(o.reason) ? o.reason : 'error';
+    if (o.state === 'failed') {
+      out.reason = REASONS.includes(o.reason) ? o.reason : 'error';
+      // Android's own words (an install status message, an exception): printable characters only, short.
+      const d = typeof o.detail === 'string' ? o.detail.replace(/[^A-Za-z0-9 _.,:()\/'?-]/g, '').trim().slice(0, 160) : '';
+      if (d) out.detail = d;
+    }
     return out;
   }
   /** Automatic checks run at most once a day, and never when the user switched them off. */

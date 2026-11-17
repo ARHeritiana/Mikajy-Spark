@@ -50,6 +50,9 @@ public class MainActivity extends Activity {
   private final AtomicBoolean updating = new AtomicBoolean(false);
   /** A verified update waiting for the user to allow "Install unknown apps" (resumed in onResume). */
   private File awaitingPermission;
+  /** The verified update being installed, and whether Android's installer screen was already tried for it. */
+  private File installing;
+  private boolean triedScreen;
 
   private void immersive() {
     getWindow().getDecorView().setSystemUiVisibility(
@@ -142,25 +145,28 @@ public class MainActivity extends Activity {
      */
     @JavascriptInterface public void installUpdate(final String apkUrl, final String sumsUrl) {
       if (!UpdateChecker.isReleaseUrl(apkUrl) || !UpdateChecker.isReleaseUrl(sumsUrl)) return;
+      if (confirming) { confirming = false; updating.set(false); }   // Android's confirmation was dismissed without an answer
       final ExecutorService worker = net;
       if (worker == null || !updating.compareAndSet(false, true)) return;
       worker.execute(new Runnable() { @Override public void run() {
         File dir = SelfInstaller.dir(MainActivity.this);
         if (!dir.isDirectory() && !dir.mkdirs()) { failed("error"); return; }
-        final File apk = new File(dir, "update.apk");
-        String result = UpdateChecker.download(apkUrl, sumsUrl, apk, new UpdateChecker.Progress() {
-          private long shown = -1;   // last reported percent, or byte count when the size is unknown
+        final File apk = new File(dir, ShareProvider.APK_NAME);
+        UpdateChecker.Progress shown = new UpdateChecker.Progress() {
+          private long last = -1;   // last reported percent, or byte count when the size is unknown
           @Override public void update(long done, long total) {
             long now = total > 0 ? 100 * done / total : done / (256 * 1024);   // one report per percent / per 256 KB
-            if (now == shown) return;
-            shown = now;
+            if (now == last) return;
+            last = now;
             progress("downloading", total > 0 ? now / 100.0 : -1);
           }
-        });
-        if (!"ok".equals(result)) { failed(result); return; }
+        };
+        String result = UpdateChecker.download(apkUrl, sumsUrl, apk, shown);
+        if ("offline".equals(result)) result = UpdateChecker.download(apkUrl, sumsUrl, apk, shown);   // a dropped connection: once more
+        if (!"ok".equals(result)) { failed(result, UpdateChecker.lastDetail); return; }
         report("{\"state\":\"verifying\"}");
         String bad = SelfInstaller.checkArchive(MainActivity.this, apk);
-        if (bad != null) { apk.delete(); failed(bad); return; }
+        if (bad != null) { apk.delete(); failed(bad, "not a newer com.mikajy.app"); return; }
         runOnUiThread(new Runnable() { @Override public void run() { installNow(apk); }});
       }});
     }
@@ -188,10 +194,24 @@ public class MainActivity extends Activity {
     report("{\"state\":\"" + state + "\",\"p\":" + (p < 0 ? "-1" : String.valueOf(Math.max(0, Math.min(1, p)))) + "}");
   }
 
-  private void failed(String reason) {
+  /** Android's confirmation (or installer screen) is showing: a new tap on the page may start over. */
+  private volatile boolean confirming;
+
+  private void failed(String reason) { failed(reason, lastDetail); }
+
+  /** Reports a failure with a short detail (Android's own message, an exception) that the page shows under the buttons. */
+  private void failed(String reason, String detail) {
     updating.set(false);
-    report("{\"state\":\"failed\",\"reason\":\"" + reason + "\"}");
+    confirming = false;
+    lastDetail = "";
+    try {
+      report(new JSONObject().put("state", "failed").put("reason", reason).put("detail", UpdateChecker.clean(detail)).toString());
+    } catch (org.json.JSONException e) {
+      report("{\"state\":\"failed\",\"reason\":\"" + reason + "\"}");
+    }
   }
+  /** Android's message about the last install failure, kept for the report. */
+  private String lastDetail = "";
 
   /** UI thread. Asks once for "Install unknown apps" if Android needs it, then writes the install session off the UI thread. */
   private void installNow(final File apk) {
@@ -206,24 +226,49 @@ public class MainActivity extends Activity {
       }
       return;
     }
+    installing = apk;
+    triedScreen = false;
     report("{\"state\":\"installing\"}");
     io.execute(new Runnable() { @Override public void run() {
       try {
         SelfInstaller.install(MainActivity.this, apk);
       } catch (IOException | RuntimeException e) {
         Log.e(TAG, "Update install failed", e);
-        failed("install");
+        final String why = UpdateChecker.detail(e);
+        runOnUiThread(new Runnable() { @Override public void run() { lastDetail = why; sessionFailed("install"); }});
       }
     }});
+  }
+
+  /** UI thread. The install session failed: try Android's own installer screen once, unless the package itself was refused. */
+  private void sessionFailed(String why) {
+    File apk = installing;
+    if (("install".equals(why) || "blocked".equals(why)) && !triedScreen && apk != null && apk.isFile()) {
+      triedScreen = true;
+      if (SelfInstaller.openSystemInstaller(this)) { confirming = true; report("{\"state\":\"confirm\"}"); return; }
+      lastDetail = (lastDetail.isEmpty() ? "" : lastDetail + "; ") + "no installer screen";
+    }
+    failed(why);
   }
 
   @Override protected void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
     if (intent == null || !SelfInstaller.ACTION_STATUS.equals(intent.getAction())) return;
     String state = SelfInstaller.onStatus(this, intent);
-    if ("confirm".equals(state)) report("{\"state\":\"confirm\"}");
-    else if ("installed".equals(state)) { updating.set(false); report("{\"state\":\"installed\"}"); }
-    else failed(state);
+    String message = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
+    if (message != null) lastDetail = message;
+    if ("confirm".equals(state)) { confirming = true; report("{\"state\":\"confirm\"}"); }
+    else if ("installed".equals(state)) { updating.set(false); confirming = false; report("{\"state\":\"installed\"}"); }
+    else if ("aborted".equals(state) || "conflict".equals(state)) failed(state);
+    else sessionFailed(state);
+  }
+
+  /** The answer of Android's installer screen (fallback path). Success replaces the app, so only failures arrive here. */
+  @Override protected void onActivityResult(int request, int result, Intent data) {
+    super.onActivityResult(request, result, data);
+    if (request != SelfInstaller.REQUEST_SYSTEM_INSTALL) return;
+    if (result == RESULT_OK) { updating.set(false); confirming = false; report("{\"state\":\"installed\"}"); }
+    else failed(result == RESULT_CANCELED ? "aborted" : "install", "installer screen result " + result);
   }
 
   @Override protected void onCreate(Bundle state) {
