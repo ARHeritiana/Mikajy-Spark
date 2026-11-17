@@ -107,3 +107,12 @@ test('a flag drawn from the end of a stem joins it; a symbol written tight again
   const one = [[374, 216], [404, 168], [398, 248]].map(([x, y]) => [x - 330 + 8, y]);
   assert.deepEqual(R.groupStrokes([open, one]).map(g => g.s.length), [1, 1]);
 });
+
+test('a − written just after and below a small exponent is not part of it; the bars of π, 7 and + still are', () => {
+  const exp2 = [[76, 250], [90, 243], [103, 252], [80, 286], [103, 286]], minus = [[92, 304], [107, 304], [122, 305]];
+  assert.equal(R.groupStrokes([exp2, minus]).length, 2);
+  const legs = [[[10, 10], [10, 60]], [[40, 10], [42, 60]]], top = [[0, 9], [25, 8], [52, 9]];
+  assert.equal(R.groupStrokes([top, ...legs]).length, 1, 'π');
+  const seven = [[0, 0], [40, 0], [15, 80]], cross = [[10, 40], [25, 40], [40, 40]];
+  assert.equal(R.groupStrokes([seven, cross]).length, 1, 'crossed 7');
+});

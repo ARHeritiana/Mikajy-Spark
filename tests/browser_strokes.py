@@ -409,6 +409,12 @@ async def scene_real_power_minus(page):
     await replay(page, "power minus product")
     return "2²-4×3×7", "-80"
 
+async def scene_real_raised_minus(page):
+    """The same with the − written higher, just after and below the exponent: it was grouped with the exponent's 2."""
+    for k, s in enumerate(HANDWRITING["power minus product"]):
+        await pen(page, [(x, y - 27) for x, y in s] if k == 2 else s)
+    return "2²-4×3×7", "-80"
+
 async def scene_real_bracket_fraction(page):
     """320×(1+27/100): the 1 after a tall ( is a symbol of its own (they were read as one, and 0×( as the word exp)."""
     await replay(page, "bracket with a fraction")
@@ -442,7 +448,8 @@ EDIT_SCENES = [("cursive x", scene_cursive_x), ("brackets )( are not an x", scen
                ("= completed long after", scene_equals_long_after), ("= bars drawn apart", scene_equals_bars_apart),
                ("= completed after the next term", scene_equals_after_other), ("+ inserted between digits", scene_insert_between),
                ("dot of i added long after", scene_dot_long_after),
-               ("real: 2² − 4×3×7", scene_real_power_minus), ("real: 320×(1+27/100)", scene_real_bracket_fraction),
+               ("real: 2² − 4×3×7", scene_real_power_minus), ("real: raised −", scene_real_raised_minus),
+               ("real: 320×(1+27/100)", scene_real_bracket_fraction),
                ("real: (−3−√64)/3", scene_real_root_numerator), ("real: steep root", scene_real_steep_root),
                ("real: bar after the numerator", scene_real_bar_after_numerator)]
 

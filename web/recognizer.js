@@ -235,7 +235,11 @@ const Recognizer = (() => {
       (!qs || [qs[0], qs[qs.length - 1]].some(p => Math.abs(p[0] - p0[0]) < r && Math.abs(p[1] - p0[1]) < r));
     // Same column is not enough: two symbols stacked one above the other (in nested fractions) stay apart. The
     // bars of = may be far apart for their (zero) height, but not for their width.
-    const gap = Math.max(0, b.y0 - q.y1, q.y0 - b.y1), close = gap < Math.max(.5 * Math.max(b.h, q.h), .8 * Math.max(b.w, q.w));
+    const gap = Math.max(0, b.y0 - q.y1, q.y0 - b.y1);
+    // A dash clearly under or over a symbol is a symbol of its own (the − written just after and below the exponent of
+    // 2² − 4); a flat stroke that is part of a symbol touches or crosses it (π, 5, 7, +). Two flat strokes are an =.
+    const flatB = b.w > 2.5 * Math.max(b.h, 1), apart = flatB !== bar && gap > .12 * Math.max(b.w, b.h, q.w, q.h);
+    const close = !apart && gap < Math.max(.5 * Math.max(b.h, q.h), .8 * Math.max(b.w, q.w));
     return touch || (cx >= q.x0 - m && cx <= q.x1 + m && (tiny ? bar || qTiny || dotA || dotB : close));
   }
   /** Groups strokes into symbols: [{s: strokes in drawing order, b: box, tiny, x}], in the order of each symbol's first

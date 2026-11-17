@@ -224,7 +224,8 @@ const Ink = (() => {
   /** The typeset run standing above the flat stroke `b`: what `aboveBar` picks, with the minus signs between those nodes
    *  (−3 − √64) and a leading sign that starts left of the bar but reaches over it. Removed from `seq`; {k: -1} if none. */
   function numeratorRun(seq, b, s) {
-    const above = aboveBar(b, s), y = (b.y0 + b.y1) / 2, H = 1.3 * Math.max(s * .55, 30);
+    // a typeset − floats at mid-height, about .3 of the font size above the digits' feet
+    const above = aboveBar(b, s), y = (b.y0 + b.y1) / 2, H = 1.3 * Math.max(s * .55, 30) + .35 * s;
     const sign = n => { const q = bx(n); return n.t === 'g' && ch(n) === '-' && !!q && q.x1 > b.x0 && q.x0 < b.x1 && q.y1 <= y + 10 && y - q.y1 < H; };
     const idx = seq.map((n, k) => above(n) ? k : -1).filter(k => k >= 0);
     if (!idx.length) return {k: -1, run: []};
