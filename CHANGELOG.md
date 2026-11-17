@@ -5,6 +5,10 @@ and versions follow `MAJOR.MINOR` or `MAJOR.MINOR.PATCH` (the Android `versionNa
 
 ## [Unreleased]
 
+## [5.9] - 2026-11-17
+
+Updates 5.8 in place from the app. `versionCode` 25.
+
 ### Fixed
 Found by replaying real finger-written expressions (traced from screenshots, now `tests/fixtures/handwriting.json`):
 - **`2² − 4×3×7` was read `2^(2−) 4×3×7`.** A − written at the middle of the base, after an exponent, is above the
